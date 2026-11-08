@@ -7,35 +7,35 @@ const bucket: Rule = { algorithm: Algorithm.TokenBucket, capacity: 2, refillPerS
 const window: Rule = { algorithm: Algorithm.SlidingWindow, limit: 2, windowMs: 1000 };
 
 describe('MemoryStore', () => {
-  it('keeps independent counters per key', async () => {
+  it('keeps independent counters per key', () => {
     const store = new MemoryStore(new FakeClock());
-    await store.consume('a', bucket);
-    await store.consume('a', bucket);
-    expect((await store.consume('a', bucket)).allowed).toBe(false);
-    expect((await store.consume('b', bucket)).allowed).toBe(true);
+    store.consume('a', bucket);
+    store.consume('a', bucket);
+    expect(store.consume('a', bucket).allowed).toBe(false);
+    expect(store.consume('b', bucket).allowed).toBe(true);
   });
 
-  it('does not mix state between algorithms for the same key', async () => {
+  it('does not mix state between algorithms for the same key', () => {
     const store = new MemoryStore(new FakeClock());
-    await store.consume('a', bucket);
-    await store.consume('a', bucket);
-    expect((await store.consume('a', window)).allowed).toBe(true);
+    store.consume('a', bucket);
+    store.consume('a', bucket);
+    expect(store.consume('a', window).allowed).toBe(true);
   });
 
-  it('uses the injected clock', async () => {
+  it('uses the injected clock', () => {
     const clock = new FakeClock();
     const store = new MemoryStore(clock);
-    await store.consume('a', bucket);
-    await store.consume('a', bucket);
-    expect((await store.consume('a', bucket)).allowed).toBe(false);
+    store.consume('a', bucket);
+    store.consume('a', bucket);
+    expect(store.consume('a', bucket).allowed).toBe(false);
     clock.advance(1000);
-    expect((await store.consume('a', bucket)).allowed).toBe(true);
+    expect(store.consume('a', bucket).allowed).toBe(true);
   });
 
-  it('allows exactly `limit` out of many concurrent calls', async () => {
+  it('allows exactly `limit` out of many calls at the same instant', () => {
     const store = new MemoryStore(new FakeClock());
     const rule: Rule = { algorithm: Algorithm.TokenBucket, capacity: 50, refillPerSecond: 1 };
-    const results = await Promise.all(Array.from({ length: 200 }, () => store.consume('k', rule)));
+    const results = Array.from({ length: 200 }, () => store.consume('k', rule));
     expect(results.filter((r) => r.allowed)).toHaveLength(50);
   });
 
@@ -49,7 +49,7 @@ describe('MemoryStore', () => {
     ['NaN refill', { algorithm: Algorithm.TokenBucket, capacity: 1, refillPerSecond: Number.NaN }],
     ['zero limit', { algorithm: Algorithm.SlidingWindow, limit: 0, windowMs: 1000 }],
     ['negative window', { algorithm: Algorithm.SlidingWindow, limit: 1, windowMs: -1 }],
-  ])('rejects invalid rules: %s', async (_, rule) => {
-    await expect(new MemoryStore().consume('k', rule)).rejects.toThrow(RangeError);
+  ])('rejects invalid rules: %s', (_, rule) => {
+    expect(() => new MemoryStore().consume('k', rule)).toThrow(RangeError);
   });
 });

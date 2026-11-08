@@ -83,13 +83,22 @@ Quedan afuera:
 El código asíncrono se escribe con `async`/`await`.
 
 - No usar `.then()`, `.catch()` ni `.finally()`, ni construir promesas a mano con `Promise.resolve`, `Promise.reject` o `new Promise(...)`.
-- Un método que implementa una interfaz async es `async`, aunque su cuerpo sea síncrono. Así un `throw` llega siempre como promesa rechazada y nunca de forma síncrona. Por eso la regla `@typescript-eslint/require-await` está desactivada.
+- **Toda función `async` tiene al menos un `await` real.** Lo controla `@typescript-eslint/require-await`, que está activa; no se desactiva ni con directivas.
+- **Una función que no es `async` no devuelve promesas.** Si no hay nada que esperar, la función es síncrona y devuelve el valor directamente.
+- Cuando una interfaz tiene implementaciones síncronas y asíncronas, el tipo de retorno es `T | Promise<T>`. Cada implementación devuelve lo que corresponde, y quien llama hace `await` siempre.
   ```ts
-  async consume(key: string, rule: Rule): Promise<Decision> {
-    assertValidRule(rule);
-    ...
+  interface RateLimiter {
+    consume(key: string, rule: Rule): Decision | Promise<Decision>;
   }
+  class MemoryStore implements RateLimiter {
+    consume(key: string, rule: Rule): Decision { ... }
+  }
+  class RedisStore implements RateLimiter {
+    async consume(key: string, rule: Rule): Promise<Decision> { ... await this.redis.evalsha(...) ... }
+  }
+  const decision = await limiter.consume(key, rule);
   ```
+- Los errores se lanzan con `throw` también en las funciones síncronas. Al llamar con `await`, el error llega igual.
 - Los combinadores sí se usan, siempre con `await`: `await Promise.all(...)`, `await Promise.race(...)`.
 - Para esperar un tiempo usar `await setTimeout(ms)` de `node:timers/promises`, no `new Promise(r => setTimeout(r, ms))`.
 

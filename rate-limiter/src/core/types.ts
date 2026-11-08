@@ -27,5 +27,5 @@ export interface Decision {
 }
 
 export interface RateLimiter {
-  consume(key: string, rule: Rule): Promise<Decision>;
+  consume(key: string, rule: Rule): Decision | Promise<Decision>;
 }

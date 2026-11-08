@@ -18,7 +18,6 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
     rules: {
-      '@typescript-eslint/require-await': 'off',
       'no-restricted-imports': [
         'error',
         {

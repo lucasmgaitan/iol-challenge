@@ -13,7 +13,7 @@ export class MemoryStore implements RateLimiter {
 
   constructor(private readonly clock: Clock = systemClock) {}
 
-  async consume(key: string, rule: Rule): Promise<Decision> {
+  consume(key: string, rule: Rule): Decision {
     assertValidRule(rule);
     const now = this.clock.now();
     const stateKey = `${rule.algorithm}${STATE_KEY_SEPARATOR}${key}`;
