@@ -1,4 +1,4 @@
-import type { Decision, TokenBucketRule } from '../core/types.js';
+import type { Decision, TokenBucketRule } from '#core/types.js';
 
 export interface TokenBucketState {
   readonly tokens: number;

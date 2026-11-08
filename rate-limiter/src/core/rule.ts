@@ -1,4 +1,4 @@
-import { Algorithm, type Rule } from './types.js';
+import { Algorithm, type Rule } from '#core/types.js';
 
 export const RuleErrorMessage = {
   positiveInteger: (field: string, value: number) =>

@@ -1,8 +1,8 @@
-import { slidingWindow, type SlidingWindowState } from '../algorithms/sliding-window.js';
-import { tokenBucket, type TokenBucketState } from '../algorithms/token-bucket.js';
-import { systemClock, type Clock } from '../core/clock.js';
-import { assertValidRule } from '../core/rule.js';
-import { Algorithm, type Decision, type RateLimiter, type Rule } from '../core/types.js';
+import { slidingWindow, type SlidingWindowState } from '#algorithms/sliding-window.js';
+import { tokenBucket, type TokenBucketState } from '#algorithms/token-bucket.js';
+import { systemClock, type Clock } from '#core/clock.js';
+import { assertValidRule } from '#core/rule.js';
+import { Algorithm, type Decision, type RateLimiter, type Rule } from '#core/types.js';
 
 type State = TokenBucketState | SlidingWindowState;
 

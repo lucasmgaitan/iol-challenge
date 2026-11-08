@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { FakeClock } from '../../src/core/clock.js';
-import { Algorithm, type Rule } from '../../src/core/types.js';
-import { MemoryStore } from '../../src/stores/memory-store.js';
+import { FakeClock } from '#core/clock.js';
+import { Algorithm, type Rule } from '#core/types.js';
+import { MemoryStore } from '#stores/memory-store.js';
 
 const bucket: Rule = { algorithm: Algorithm.TokenBucket, capacity: 2, refillPerSecond: 1 };
 const window: Rule = { algorithm: Algorithm.SlidingWindow, limit: 2, windowMs: 1000 };

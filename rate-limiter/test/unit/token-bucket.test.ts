@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { tokenBucket, type TokenBucketState } from '../../src/algorithms/token-bucket.js';
-import { Algorithm, type Decision, type TokenBucketRule } from '../../src/core/types.js';
+import { tokenBucket, type TokenBucketState } from '#algorithms/token-bucket.js';
+import { Algorithm, type Decision, type TokenBucketRule } from '#core/types.js';
 
 const rule: TokenBucketRule = { algorithm: Algorithm.TokenBucket, capacity: 3, refillPerSecond: 1 };
 

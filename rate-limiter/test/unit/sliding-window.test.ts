@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { slidingWindow, type SlidingWindowState } from '../../src/algorithms/sliding-window.js';
-import { Algorithm, type Decision, type SlidingWindowRule } from '../../src/core/types.js';
+import { slidingWindow, type SlidingWindowState } from '#algorithms/sliding-window.js';
+import { Algorithm, type Decision, type SlidingWindowRule } from '#core/types.js';
 
 const rule: SlidingWindowRule = { algorithm: Algorithm.SlidingWindow, limit: 4, windowMs: 1000 };
 

@@ -15,6 +15,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "customConditions": ["source"],
     "types": ["node"],
     "outDir": "dist",
     "rootDir": "."

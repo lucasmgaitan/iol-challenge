@@ -1,4 +1,4 @@
-import type { Decision, SlidingWindowRule } from '../core/types.js';
+import type { Decision, SlidingWindowRule } from '#core/types.js';
 
 export interface SlidingWindowState {
   readonly windowStart: number;
