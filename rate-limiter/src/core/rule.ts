@@ -1,27 +1,37 @@
-import type { Rule } from './types.js';
+import { Algorithm, type Rule } from './types.js';
 
-const isPositiveInt = (n: number): boolean => Number.isInteger(n) && n > 0;
-const isPositive = (n: number): boolean => Number.isFinite(n) && n > 0;
+export const RuleErrorMessage = {
+  positiveInteger: (field: string, value: number) =>
+    `${field} must be a positive integer, got ${String(value)}`,
+  positiveNumber: (field: string, value: number) =>
+    `${field} must be a positive number, got ${String(value)}`,
+} as const;
+
+type NumericField<R> = { [K in keyof R]-?: R[K] extends number ? K : never }[keyof R] & string;
+
+function requirePositiveInteger<R extends Rule>(rule: R, field: NumericField<R>): void {
+  const value = rule[field] as number;
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new RangeError(RuleErrorMessage.positiveInteger(field, value));
+  }
+}
+
+function requirePositiveNumber<R extends Rule>(rule: R, field: NumericField<R>): void {
+  const value = rule[field] as number;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError(RuleErrorMessage.positiveNumber(field, value));
+  }
+}
 
 export function assertValidRule(rule: Rule): void {
   switch (rule.algorithm) {
-    case 'token-bucket':
-      if (!isPositiveInt(rule.capacity)) {
-        throw new RangeError(`capacity must be a positive integer, got ${String(rule.capacity)}`);
-      }
-      if (!isPositive(rule.refillPerSecond)) {
-        throw new RangeError(
-          `refillPerSecond must be a positive number, got ${String(rule.refillPerSecond)}`,
-        );
-      }
+    case Algorithm.TokenBucket:
+      requirePositiveInteger(rule, 'capacity');
+      requirePositiveNumber(rule, 'refillPerSecond');
       return;
-    case 'sliding-window':
-      if (!isPositiveInt(rule.limit)) {
-        throw new RangeError(`limit must be a positive integer, got ${String(rule.limit)}`);
-      }
-      if (!isPositiveInt(rule.windowMs)) {
-        throw new RangeError(`windowMs must be a positive integer, got ${String(rule.windowMs)}`);
-      }
+    case Algorithm.SlidingWindow:
+      requirePositiveInteger(rule, 'limit');
+      requirePositiveInteger(rule, 'windowMs');
       return;
   }
 }

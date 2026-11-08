@@ -2,9 +2,11 @@ import { slidingWindow, type SlidingWindowState } from '../algorithms/sliding-wi
 import { tokenBucket, type TokenBucketState } from '../algorithms/token-bucket.js';
 import { systemClock, type Clock } from '../core/clock.js';
 import { assertValidRule } from '../core/rule.js';
-import type { Decision, RateLimiter, Rule } from '../core/types.js';
+import { Algorithm, type Decision, type RateLimiter, type Rule } from '../core/types.js';
 
 type State = TokenBucketState | SlidingWindowState;
+
+const STATE_KEY_SEPARATOR = ':';
 
 export class MemoryStore implements RateLimiter {
   private readonly states = new Map<string, State>();
@@ -22,10 +24,10 @@ export class MemoryStore implements RateLimiter {
   private consumeSync(key: string, rule: Rule): Decision {
     assertValidRule(rule);
     const now = this.clock.now();
-    const stateKey = `${rule.algorithm}:${key}`;
+    const stateKey = `${rule.algorithm}${STATE_KEY_SEPARATOR}${key}`;
 
     const result =
-      rule.algorithm === 'token-bucket'
+      rule.algorithm === Algorithm.TokenBucket
         ? tokenBucket(this.states.get(stateKey) as TokenBucketState | undefined, rule, now)
         : slidingWindow(this.states.get(stateKey) as SlidingWindowState | undefined, rule, now);
 

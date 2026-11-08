@@ -1,11 +1,18 @@
+export const Algorithm = {
+  TokenBucket: 'token-bucket',
+  SlidingWindow: 'sliding-window',
+} as const;
+
+export type Algorithm = (typeof Algorithm)[keyof typeof Algorithm];
+
 export interface TokenBucketRule {
-  readonly algorithm: 'token-bucket';
+  readonly algorithm: typeof Algorithm.TokenBucket;
   readonly capacity: number;
   readonly refillPerSecond: number;
 }
 
 export interface SlidingWindowRule {
-  readonly algorithm: 'sliding-window';
+  readonly algorithm: typeof Algorithm.SlidingWindow;
   readonly limit: number;
   readonly windowMs: number;
 }

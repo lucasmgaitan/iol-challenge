@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { slidingWindow, type SlidingWindowState } from '../../src/algorithms/sliding-window.js';
-import type { Decision, SlidingWindowRule } from '../../src/core/types.js';
+import { Algorithm, type Decision, type SlidingWindowRule } from '../../src/core/types.js';
 
-const rule: SlidingWindowRule = { algorithm: 'sliding-window', limit: 4, windowMs: 1000 };
+const rule: SlidingWindowRule = { algorithm: Algorithm.SlidingWindow, limit: 4, windowMs: 1000 };
 
 function run(times: number[], r: SlidingWindowRule = rule): Decision[] {
   let state: SlidingWindowState | undefined;

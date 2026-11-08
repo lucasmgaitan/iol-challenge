@@ -1,3 +1,5 @@
+export const CLOCK_BACKWARDS_ERROR = 'cannot move clock backwards';
+
 export interface Clock {
   now(): number;
 }
@@ -14,7 +16,7 @@ export class FakeClock implements Clock {
   }
 
   advance(ms: number): void {
-    if (ms < 0) throw new RangeError('cannot move clock backwards');
+    if (ms < 0) throw new RangeError(CLOCK_BACKWARDS_ERROR);
     this.current += ms;
   }
 }

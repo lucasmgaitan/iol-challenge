@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FakeClock, systemClock } from '../../src/core/clock.js';
+import { CLOCK_BACKWARDS_ERROR, FakeClock, systemClock } from '../../src/core/clock.js';
 
 describe('FakeClock', () => {
   it('starts at the given time and advances manually', () => {
@@ -12,7 +12,7 @@ describe('FakeClock', () => {
   it('rejects moving backwards', () => {
     expect(() => {
       new FakeClock().advance(-1);
-    }).toThrow(RangeError);
+    }).toThrow(CLOCK_BACKWARDS_ERROR);
   });
 });
 

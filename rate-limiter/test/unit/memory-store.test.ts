@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '../../src/core/clock.js';
-import type { Rule } from '../../src/core/types.js';
+import { Algorithm, type Rule } from '../../src/core/types.js';
 import { MemoryStore } from '../../src/stores/memory-store.js';
 
-const bucket: Rule = { algorithm: 'token-bucket', capacity: 2, refillPerSecond: 1 };
-const window: Rule = { algorithm: 'sliding-window', limit: 2, windowMs: 1000 };
+const bucket: Rule = { algorithm: Algorithm.TokenBucket, capacity: 2, refillPerSecond: 1 };
+const window: Rule = { algorithm: Algorithm.SlidingWindow, limit: 2, windowMs: 1000 };
 
 describe('MemoryStore', () => {
   it('keeps independent counters per key', async () => {
@@ -34,18 +34,21 @@ describe('MemoryStore', () => {
 
   it('allows exactly `limit` out of many concurrent calls', async () => {
     const store = new MemoryStore(new FakeClock());
-    const rule: Rule = { algorithm: 'token-bucket', capacity: 50, refillPerSecond: 1 };
+    const rule: Rule = { algorithm: Algorithm.TokenBucket, capacity: 50, refillPerSecond: 1 };
     const results = await Promise.all(Array.from({ length: 200 }, () => store.consume('k', rule)));
     expect(results.filter((r) => r.allowed)).toHaveLength(50);
   });
 
   it.each<[string, Rule]>([
-    ['zero capacity', { algorithm: 'token-bucket', capacity: 0, refillPerSecond: 1 }],
-    ['fractional capacity', { algorithm: 'token-bucket', capacity: 1.5, refillPerSecond: 1 }],
-    ['zero refill', { algorithm: 'token-bucket', capacity: 1, refillPerSecond: 0 }],
-    ['NaN refill', { algorithm: 'token-bucket', capacity: 1, refillPerSecond: Number.NaN }],
-    ['zero limit', { algorithm: 'sliding-window', limit: 0, windowMs: 1000 }],
-    ['negative window', { algorithm: 'sliding-window', limit: 1, windowMs: -1 }],
+    ['zero capacity', { algorithm: Algorithm.TokenBucket, capacity: 0, refillPerSecond: 1 }],
+    [
+      'fractional capacity',
+      { algorithm: Algorithm.TokenBucket, capacity: 1.5, refillPerSecond: 1 },
+    ],
+    ['zero refill', { algorithm: Algorithm.TokenBucket, capacity: 1, refillPerSecond: 0 }],
+    ['NaN refill', { algorithm: Algorithm.TokenBucket, capacity: 1, refillPerSecond: Number.NaN }],
+    ['zero limit', { algorithm: Algorithm.SlidingWindow, limit: 0, windowMs: 1000 }],
+    ['negative window', { algorithm: Algorithm.SlidingWindow, limit: 1, windowMs: -1 }],
   ])('rejects invalid rules: %s', async (_, rule) => {
     await expect(new MemoryStore().consume('k', rule)).rejects.toThrow(RangeError);
   });

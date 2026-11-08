@@ -1,6 +1,6 @@
 ---
 name: code-conventions
-description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo). Usar siempre que se escriba, edite, renombre o revise código en rate-limiter/ (src/, test/, configs, scripts Lua).
+description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings). Usar siempre que se escriba, edite, renombre o revise código en rate-limiter/ (src/, test/, configs, scripts Lua).
 ---
 
 # Convenciones de código
@@ -50,6 +50,33 @@ Todos los archivos y carpetas de código van en minúsculas, con palabras separa
 Esto aplica al nombre del archivo, no a lo que exporta: `token-bucket.ts` exporta `tokenBucket` y `TokenBucketState`. Al renombrar, actualizar los imports (con extensión `.js`, por ESM).
 
 Quedan afuera los nombres que fija una herramienta o una convención externa: `README.md`, `DESIGN.md`, `SKILL.md`, `Dockerfile`, `package.json`, `tsconfig.json`, `vitest.config.ts`, `eslint.config.js`, `.nvmrc`, `docker-compose.yml`.
+
+## 4. No magic strings
+
+Todo valor string se define una sola vez como constante con nombre y se usa a través de ella. Esto incluye discriminadores, claves y prefijos de Redis, separadores, nombres de headers y métricas, valores de configuración y mensajes de error.
+
+- **Conjuntos de valores** (como un enum): objeto `as const` y un tipo derivado con el mismo nombre. No usar `enum` de TypeScript.
+  ```ts
+  export const Algorithm = { TokenBucket: 'token-bucket', SlidingWindow: 'sliding-window' } as const;
+  export type Algorithm = (typeof Algorithm)[keyof typeof Algorithm];
+  ```
+- **Valores sueltos**: `const` en `UPPER_SNAKE_CASE`, en el módulo que es dueño del concepto.
+  ```ts
+  const STATE_KEY_SEPARATOR = ':';
+  ```
+- **Mensajes con datos variables**: una función dentro de un objeto de mensajes, para que el texto viva en un solo lugar y los tests puedan comparar contra él.
+  ```ts
+  export const RuleErrorMessage = {
+    positiveInteger: (field: string, value: number) => `${field} must be a positive integer, got ${String(value)}`,
+  } as const;
+  ```
+- Los tests usan las mismas constantes (`algorithm: Algorithm.TokenBucket`, `toThrow(CLOCK_BACKWARDS_ERROR)`), no copias del literal.
+
+Quedan afuera:
+- especificadores de import;
+- títulos de `describe` / `it`;
+- datos arbitrarios de tests, como claves de ejemplo (`'a'`, `'user-1'`);
+- nombres de propiedad tipados como `keyof`, porque los valida el compilador (`requirePositiveInteger(rule, 'capacity')`).
 
 ## Al terminar
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { tokenBucket, type TokenBucketState } from '../../src/algorithms/token-bucket.js';
-import type { Decision, TokenBucketRule } from '../../src/core/types.js';
+import { Algorithm, type Decision, type TokenBucketRule } from '../../src/core/types.js';
 
-const rule: TokenBucketRule = { algorithm: 'token-bucket', capacity: 3, refillPerSecond: 1 };
+const rule: TokenBucketRule = { algorithm: Algorithm.TokenBucket, capacity: 3, refillPerSecond: 1 };
 
 function run(times: number[], r: TokenBucketRule = rule): Decision[] {
   let state: TokenBucketState | undefined;
@@ -44,7 +44,11 @@ describe('tokenBucket', () => {
   });
 
   it('supports fractional refill rates', () => {
-    const slow: TokenBucketRule = { algorithm: 'token-bucket', capacity: 1, refillPerSecond: 0.5 };
+    const slow: TokenBucketRule = {
+      algorithm: Algorithm.TokenBucket,
+      capacity: 1,
+      refillPerSecond: 0.5,
+    };
     const d = run([0, 0, 1999, 2000], slow);
     expect(d.map((x) => x.allowed)).toEqual([true, false, false, true]);
     expect(d[1]?.retryAfterMs).toBe(2000);
