@@ -23,11 +23,11 @@ Un rate limiter distribuido que funciona como middleware HTTP, siguiendo el cap�
 ## 3. Estructura propuesta
 
 ```
-<raíz del repo>/
+rate-limiter/
   src/
     core/          # Decision, Rule, Clock, interfaz RateLimiter
-    algorithms/    # tokenBucket.ts, slidingWindow.ts
-    stores/        # memoryStore.ts, redisStore.ts, lua/*.lua
+    algorithms/    # token-bucket.ts, sliding-window.ts
+    stores/        # memory-store.ts, redis-store.ts, lua/*.lua
     config/        # carga + validación de reglas YAML
     http/          # plugin Fastify, headers, identificación del cliente
     resilience/    # circuit breaker, timeouts
@@ -55,16 +55,16 @@ Un rate limiter distribuido que funciona como middleware HTTP, siguiendo el cap�
 
 ## 6. Scaffolding (fase 1)
 
-| Tema               | Elección                                                                |
-| ------------------ | ----------------------------------------------------------------------- |
-| Gestor de paquetes | npm                                                                     |
-| Módulos            | ESM (`"type": "module"`, `module: NodeNext`)                            |
-| Build / dev        | `tsc` (build) + `tsx` (dev)                                             |
-| TypeScript         | `strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`    |
-| Tests              | Vitest (+ coverage v8)                                                  |
-| Lint / format      | ESLint flat config (`typescript-eslint` strict type-checked) + Prettier |
-| Layout             | Un solo paquete en la raíz del repo                                     |
-| CI                 | GitHub Actions: typecheck, lint, format, test, build                    |
+| Tema               | Elección                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| Gestor de paquetes | npm                                                                                                |
+| Módulos            | ESM (`"type": "module"`, `module: NodeNext`)                                                       |
+| Build / dev        | `tsc` (build) + `tsx` (dev)                                                                        |
+| TypeScript         | `strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`                               |
+| Tests              | Vitest (+ coverage v8)                                                                             |
+| Lint / format      | ESLint flat config (`typescript-eslint` strict type-checked) + Prettier                            |
+| Layout             | Un solo paquete en `rate-limiter/` (lo pide el enunciado); en la raíz solo `.github/` y `.claude/` |
+| CI                 | GitHub Actions: typecheck, lint, format, test, build                                               |
 
 ## Estado
 

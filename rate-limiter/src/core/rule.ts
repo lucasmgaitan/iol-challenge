@@ -3,11 +3,6 @@ import type { Rule } from './types.js';
 const isPositiveInt = (n: number): boolean => Number.isInteger(n) && n > 0;
 const isPositive = (n: number): boolean => Number.isFinite(n) && n > 0;
 
-/**
- * Rechaza reglas que no tienen sentido (límites en 0, negativos, NaN).
- * Un límite 0 no es "bloquear todo": para eso conviene una regla explícita de deny,
- * así no hay que inventar un Retry-After infinito.
- */
 export function assertValidRule(rule: Rule): void {
   switch (rule.algorithm) {
     case 'token-bucket':

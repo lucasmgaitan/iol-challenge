@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { tokenBucket, type TokenBucketState } from '../../src/algorithms/tokenBucket.js';
+import { tokenBucket, type TokenBucketState } from '../../src/algorithms/token-bucket.js';
 import type { Decision, TokenBucketRule } from '../../src/core/types.js';
 
 const rule: TokenBucketRule = { algorithm: 'token-bucket', capacity: 3, refillPerSecond: 1 };
 
-/** Ejecuta consumos sucesivos en los instantes dados, encadenando el estado. */
 function run(times: number[], r: TokenBucketRule = rule): Decision[] {
   let state: TokenBucketState | undefined;
   return times.map((t) => {
@@ -29,7 +28,6 @@ describe('tokenBucket', () => {
   });
 
   it('refills continuously (partial refill)', () => {
-    // 3 consumos vacían el bucket; a los 500 ms hay medio token → rechazo con 500 ms de espera.
     const d = run([0, 0, 0, 500, 1000]);
     expect(d[3]).toMatchObject({ allowed: false, retryAfterMs: 500 });
     expect(d[4]?.allowed).toBe(true);

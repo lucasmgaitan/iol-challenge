@@ -4,5 +4,4 @@ coverage/
 .env
 *.log
 .DS_Store
-# Enunciado del challenge (no se versiona)
 *.pdf

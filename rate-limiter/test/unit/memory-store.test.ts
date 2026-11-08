@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '../../src/core/clock.js';
 import type { Rule } from '../../src/core/types.js';
-import { MemoryStore } from '../../src/stores/memoryStore.js';
+import { MemoryStore } from '../../src/stores/memory-store.js';
 
 const bucket: Rule = { algorithm: 'token-bucket', capacity: 2, refillPerSecond: 1 };
 const window: Rule = { algorithm: 'sliding-window', limit: 2, windowMs: 1000 };
