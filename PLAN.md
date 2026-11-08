@@ -69,7 +69,7 @@ Un rate limiter distribuido que funciona como middleware HTTP, siguiendo el cap√
 ## Estado
 
 - [x] Fase 1: setup
-- [ ] Fase 2: core + algoritmos en memoria
+- [x] Fase 2: core + algoritmos en memoria
 - [ ] Fase 3: RedisStore + Lua
 - [ ] Fase 4: middleware HTTP + config
 - [ ] Fase 5: resiliencia y observabilidad
