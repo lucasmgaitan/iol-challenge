@@ -1,6 +1,6 @@
 ---
 name: code-conventions
-description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings). Usar siempre que se escriba, edite, renombre o revise código en rate-limiter/ (src/, test/, configs, scripts Lua).
+description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings, async/await). Usar siempre que se escriba, edite, renombre o revise código en rate-limiter/ (src/, test/, configs, scripts Lua).
 ---
 
 # Convenciones de código
@@ -77,6 +77,21 @@ Quedan afuera:
 - títulos de `describe` / `it`;
 - datos arbitrarios de tests, como claves de ejemplo (`'a'`, `'user-1'`);
 - nombres de propiedad tipados como `keyof`, porque los valida el compilador (`requirePositiveInteger(rule, 'capacity')`).
+
+## 5. async/await, no Promises explícitas
+
+El código asíncrono se escribe con `async`/`await`.
+
+- No usar `.then()`, `.catch()` ni `.finally()`, ni construir promesas a mano con `Promise.resolve`, `Promise.reject` o `new Promise(...)`.
+- Un método que implementa una interfaz async es `async`, aunque su cuerpo sea síncrono. Así un `throw` llega siempre como promesa rechazada y nunca de forma síncrona. Por eso la regla `@typescript-eslint/require-await` está desactivada.
+  ```ts
+  async consume(key: string, rule: Rule): Promise<Decision> {
+    assertValidRule(rule);
+    ...
+  }
+  ```
+- Los combinadores sí se usan, siempre con `await`: `await Promise.all(...)`, `await Promise.race(...)`.
+- Para esperar un tiempo usar `await setTimeout(ms)` de `node:timers/promises`, no `new Promise(r => setTimeout(r, ms))`.
 
 ## Al terminar
 
