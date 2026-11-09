@@ -5,13 +5,17 @@ export const Algorithm = {
 
 export type Algorithm = (typeof Algorithm)[keyof typeof Algorithm];
 
-export interface TokenBucketRule {
+export interface RuleBase {
+  readonly name: string;
+}
+
+export interface TokenBucketRule extends RuleBase {
   readonly algorithm: typeof Algorithm.TokenBucket;
   readonly capacity: number;
   readonly refillPerSecond: number;
 }
 
-export interface SlidingWindowRule {
+export interface SlidingWindowRule extends RuleBase {
   readonly algorithm: typeof Algorithm.SlidingWindow;
   readonly limit: number;
   readonly windowMs: number;

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { tokenBucket, type TokenBucketState } from '#strategies/token-bucket.js';
 import { Algorithm, type Decision, type TokenBucketRule } from '#core/types.js';
 
-const rule: TokenBucketRule = { algorithm: Algorithm.TokenBucket, capacity: 3, refillPerSecond: 1 };
+const rule: TokenBucketRule = {
+  name: 'test',
+  algorithm: Algorithm.TokenBucket,
+  capacity: 3,
+  refillPerSecond: 1,
+};
 
 function run(times: number[], r: TokenBucketRule = rule): Decision[] {
   let state: TokenBucketState | undefined;
@@ -45,6 +50,7 @@ describe('tokenBucket', () => {
 
   it('supports fractional refill rates', () => {
     const slow: TokenBucketRule = {
+      name: 'test',
       algorithm: Algorithm.TokenBucket,
       capacity: 1,
       refillPerSecond: 0.5,
