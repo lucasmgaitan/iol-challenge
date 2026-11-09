@@ -25,9 +25,9 @@ Un rate limiter distribuido que funciona como middleware HTTP, siguiendo el cap�
 ```
 rate-limiter/
   src/
-    core/          # Decision, Rule, Clock, interfaz RateLimiter
-    algorithms/    # token-bucket.ts, sliding-window.ts
-    stores/        # memory-store.ts, redis-store.ts, lua/*.lua
+    core/          # dominio: RateLimiter, StateStore (puerto), Rule, Decision, Clock, rate-limiter.ts
+    strategies/    # dominio: token-bucket.ts, sliding-window.ts, registry.ts (patrón Strategy)
+    stores/        # infra: memory-store.ts, redis-store.ts (implementan StateStore)
     config/        # carga + validación de reglas YAML
     http/          # plugin Fastify, headers, identificación del cliente
     resilience/    # circuit breaker, timeouts

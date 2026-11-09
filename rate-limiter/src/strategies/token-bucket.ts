@@ -1,15 +1,24 @@
-import type { Decision, TokenBucketRule } from '#core/types.js';
+import { requirePositiveInteger, requirePositiveNumber } from '#core/rule.js';
+import type { Evaluation, RateLimitStrategy, TokenBucketRule } from '#core/types.js';
 
 export interface TokenBucketState {
   readonly tokens: number;
   readonly updatedAt: number;
 }
 
-export function tokenBucket(
+export const tokenBucket: RateLimitStrategy<TokenBucketRule, TokenBucketState> = {
+  validate(rule) {
+    requirePositiveInteger(rule, 'capacity');
+    requirePositiveNumber(rule, 'refillPerSecond');
+  },
+  evaluate,
+};
+
+function evaluate(
   prev: TokenBucketState | undefined,
   rule: TokenBucketRule,
   now: number,
-): { state: TokenBucketState; decision: Decision } {
+): Evaluation<TokenBucketState> {
   const { capacity, refillPerSecond } = rule;
 
   const elapsedMs = prev ? Math.max(0, now - prev.updatedAt) : 0;

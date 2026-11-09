@@ -17,7 +17,12 @@ export interface SlidingWindowRule {
   readonly windowMs: number;
 }
 
-export type Rule = TokenBucketRule | SlidingWindowRule;
+export interface RuleByAlgorithm {
+  [Algorithm.TokenBucket]: TokenBucketRule;
+  [Algorithm.SlidingWindow]: SlidingWindowRule;
+}
+
+export type Rule = RuleByAlgorithm[Algorithm];
 
 export interface Decision {
   readonly allowed: boolean;
@@ -26,6 +31,28 @@ export interface Decision {
   readonly retryAfterMs: number;
 }
 
+export interface Evaluation<S> {
+  readonly state: S;
+  readonly decision: Decision;
+}
+
+export interface RateLimitStrategy<R extends Rule, S> {
+  validate(rule: R): void;
+  evaluate(prev: S | undefined, rule: R, now: number): Evaluation<S>;
+}
+
 export interface RateLimiter {
-  consume(key: string, rule: Rule): Decision | Promise<Decision>;
+  consume(key: string, rule: Rule): Promise<Decision>;
+}
+
+export interface StateTransition<S, R> {
+  readonly state: S;
+  readonly result: R;
+}
+
+export interface StateStore {
+  update<S, R>(
+    key: string,
+    transition: (prev: S | undefined) => StateTransition<S, R>,
+  ): R | Promise<R>;
 }

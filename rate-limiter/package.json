@@ -35,9 +35,9 @@
       "source": "./src/core/*",
       "default": "./dist/core/*"
     },
-    "#algorithms/*": {
-      "source": "./src/algorithms/*",
-      "default": "./dist/algorithms/*"
+    "#strategies/*": {
+      "source": "./src/strategies/*",
+      "default": "./dist/strategies/*"
     },
     "#stores/*": {
       "source": "./src/stores/*",

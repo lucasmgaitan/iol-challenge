@@ -24,7 +24,8 @@ export default tseslint.config(
           patterns: [
             {
               regex: '^\\.{1,2}/',
-              message: 'Use a subpath import alias (#core/*, #algorithms/*, ...) instead.',
+              message:
+                'Use a subpath import alias (#core/*, #strategies/*, #stores/*, ...) instead.',
             },
           ],
         },

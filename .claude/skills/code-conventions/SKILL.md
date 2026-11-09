@@ -87,16 +87,16 @@ El código asíncrono se escribe con `async`/`await`.
 - **Una función que no es `async` no devuelve promesas.** Si no hay nada que esperar, la función es síncrona y devuelve el valor directamente.
 - Cuando una interfaz tiene implementaciones síncronas y asíncronas, el tipo de retorno es `T | Promise<T>`. Cada implementación devuelve lo que corresponde, y quien llama hace `await` siempre.
   ```ts
-  interface RateLimiter {
-    consume(key: string, rule: Rule): Decision | Promise<Decision>;
+  interface StateStore {
+    update<S, R>(key: string, transition: ...): R | Promise<R>;
   }
-  class MemoryStore implements RateLimiter {
-    consume(key: string, rule: Rule): Decision { ... }
+  class MemoryStore implements StateStore {
+    update<S, R>(key: string, transition: ...): R { ... }
   }
-  class RedisStore implements RateLimiter {
-    async consume(key: string, rule: Rule): Promise<Decision> { ... await this.redis.evalsha(...) ... }
+  class RedisStore implements StateStore {
+    async update<S, R>(key: string, transition: ...): Promise<R> { ... await this.redis.exec() ... }
   }
-  const decision = await limiter.consume(key, rule);
+  const decision = await store.update(key, transition);
   ```
 - Los errores se lanzan con `throw` también en las funciones síncronas. Al llamar con `await`, el error llega igual.
 - Los combinadores sí se usan, siempre con `await`: `await Promise.all(...)`, `await Promise.race(...)`.

@@ -9,7 +9,7 @@ Todo import de código propio usa un alias por carpeta de `src/`. Nunca rutas re
 
 ```ts
 import { Algorithm, type Rule } from '#core/types.js';
-import { tokenBucket } from '#algorithms/token-bucket.js';
+import { tokenBucket } from '#strategies/token-bucket.js';
 import { MemoryStore } from '#stores/memory-store.js';
 ```
 
@@ -36,7 +36,7 @@ Cada alias tiene dos destinos, elegidos por la condición `source`:
 
 ## Reglas
 
-1. El prefijo es `#` + el nombre de la carpeta de primer nivel de `src/`: `#core/*`, `#algorithms/*`, `#stores/*`.
+1. El prefijo es `#` + el nombre de la carpeta de primer nivel de `src/`: `#core/*`, `#strategies/*`, `#stores/*`. No usar `@`: Node exige que los subpath imports empiecen con `#`, y `@` además se confunde con paquetes de npm con scope (`@types/node`).
 2. La extensión es `.js` aunque el archivo sea `.ts` (ESM con `NodeNext`).
 3. No crear alias para subcarpetas ni para archivos sueltos: un alias por carpeta de primer nivel.
 4. Los paquetes de npm se importan por su nombre, como siempre (`'vitest'`, `'fastify'`).

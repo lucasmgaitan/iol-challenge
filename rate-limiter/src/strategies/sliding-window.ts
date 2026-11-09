@@ -1,4 +1,5 @@
-import type { Decision, SlidingWindowRule } from '#core/types.js';
+import { requirePositiveInteger } from '#core/rule.js';
+import type { Evaluation, RateLimitStrategy, SlidingWindowRule } from '#core/types.js';
 
 export interface SlidingWindowState {
   readonly windowStart: number;
@@ -6,11 +7,19 @@ export interface SlidingWindowState {
   readonly previous: number;
 }
 
-export function slidingWindow(
+export const slidingWindow: RateLimitStrategy<SlidingWindowRule, SlidingWindowState> = {
+  validate(rule) {
+    requirePositiveInteger(rule, 'limit');
+    requirePositiveInteger(rule, 'windowMs');
+  },
+  evaluate,
+};
+
+function evaluate(
   prev: SlidingWindowState | undefined,
   rule: SlidingWindowRule,
   now: number,
-): { state: SlidingWindowState; decision: Decision } {
+): Evaluation<SlidingWindowState> {
   const { limit, windowMs } = rule;
   const windowStart = Math.floor(now / windowMs) * windowMs;
 
@@ -21,7 +30,7 @@ export function slidingWindow(
   } else if (prev && prev.windowStart === windowStart - windowMs) {
     previous = prev.current;
   } else if (prev && prev.windowStart > windowStart) {
-    return slidingWindow(prev, rule, prev.windowStart);
+    return evaluate(prev, rule, prev.windowStart);
   }
 
   const elapsed = now - windowStart;

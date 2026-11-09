@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tokenBucket, type TokenBucketState } from '#algorithms/token-bucket.js';
+import { tokenBucket, type TokenBucketState } from '#strategies/token-bucket.js';
 import { Algorithm, type Decision, type TokenBucketRule } from '#core/types.js';
 
 const rule: TokenBucketRule = { algorithm: Algorithm.TokenBucket, capacity: 3, refillPerSecond: 1 };
@@ -7,7 +7,7 @@ const rule: TokenBucketRule = { algorithm: Algorithm.TokenBucket, capacity: 3, r
 function run(times: number[], r: TokenBucketRule = rule): Decision[] {
   let state: TokenBucketState | undefined;
   return times.map((t) => {
-    const out = tokenBucket(state, r, t);
+    const out = tokenBucket.evaluate(state, r, t);
     state = out.state;
     return out.decision;
   });

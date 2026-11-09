@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { slidingWindow, type SlidingWindowState } from '#algorithms/sliding-window.js';
+import { slidingWindow, type SlidingWindowState } from '#strategies/sliding-window.js';
 import { Algorithm, type Decision, type SlidingWindowRule } from '#core/types.js';
 
 const rule: SlidingWindowRule = { algorithm: Algorithm.SlidingWindow, limit: 4, windowMs: 1000 };
@@ -7,7 +7,7 @@ const rule: SlidingWindowRule = { algorithm: Algorithm.SlidingWindow, limit: 4, 
 function run(times: number[], r: SlidingWindowRule = rule): Decision[] {
   let state: SlidingWindowState | undefined;
   return times.map((t) => {
-    const out = slidingWindow(state, r, t);
+    const out = slidingWindow.evaluate(state, r, t);
     state = out.state;
     return out.decision;
   });
