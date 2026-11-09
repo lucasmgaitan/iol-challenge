@@ -1,9 +1,10 @@
-import { createRateLimiter, RedisStore } from '@iol/rate-limiter';
-import { Redis } from 'ioredis';
+import { RedisStore } from '@iol/rate-limiter';
 import { buildApp } from '#http/app.js';
+import { createRedisClient, DEFAULT_COMMAND_TIMEOUT_MS } from '#http/redis-client.js';
 
 const Env = {
   RedisUrl: 'REDIS_URL',
+  RedisCommandTimeoutMs: 'REDIS_COMMAND_TIMEOUT_MS',
   Port: 'PORT',
   Host: 'HOST',
 } as const;
@@ -13,20 +14,35 @@ const DEFAULT_PORT = 3000;
 const DEFAULT_HOST = '0.0.0.0';
 const SHUTDOWN_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 
-const redis = new Redis(process.env[Env.RedisUrl] ?? DEFAULT_REDIS_URL);
-const app = await buildApp({
-  limiter: createRateLimiter({ store: new RedisStore({ redis }) }),
-  logger: true,
-});
+const LogMessage = {
+  redisError: 'redis connection error',
+  redisUnavailableAtStartup: 'redis is unavailable at startup, rate limiting will fail open',
+} as const;
 
-app.addHook('onClose', async () => {
-  await redis.quit();
+const redis = createRedisClient({
+  url: process.env[Env.RedisUrl] ?? DEFAULT_REDIS_URL,
+  commandTimeoutMs: Number(process.env[Env.RedisCommandTimeoutMs] ?? DEFAULT_COMMAND_TIMEOUT_MS),
+});
+const app = await buildApp({ store: new RedisStore({ redis }), logger: true });
+
+redis.on('error', (error: Error) => {
+  app.log.warn({ err: error }, LogMessage.redisError);
+});
+app.addHook('onClose', (_instance, done) => {
+  redis.disconnect();
+  done();
 });
 
 for (const signal of SHUTDOWN_SIGNALS) {
   process.once(signal, () => {
     void app.close();
   });
+}
+
+try {
+  await redis.connect();
+} catch (error) {
+  app.log.warn({ err: error }, LogMessage.redisUnavailableAtStartup);
 }
 
 await app.listen({

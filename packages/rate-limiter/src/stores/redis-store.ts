@@ -103,5 +103,5 @@ function toDecision(reply: unknown): Decision {
     throw new TypeError(RedisStoreErrorMessage.unexpectedReply(reply));
   }
   const [allowed, limit, remaining, retryAfterMs] = reply as [number, number, number, number];
-  return { allowed: allowed === ALLOWED_REPLY, limit, remaining, retryAfterMs };
+  return { allowed: allowed === ALLOWED_REPLY, limit, remaining, retryAfterMs, degraded: false };
 }

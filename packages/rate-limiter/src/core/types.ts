@@ -33,6 +33,7 @@ export interface Decision {
   readonly limit: number;
   readonly remaining: number;
   readonly retryAfterMs: number;
+  readonly degraded: boolean;
 }
 
 export interface RateLimitStrategy<R extends Rule> {
@@ -47,3 +48,19 @@ export interface RateLimiter {
 export interface RateLimitStore {
   consume(key: string, rule: Rule, ttlMs: number): Promise<Decision>;
 }
+
+export interface ExecutionPolicy {
+  execute<T>(fn: () => Promise<T>): Promise<T>;
+}
+
+export interface RateLimiterObserver {
+  onDecision(rule: Rule, decision: Decision): void;
+  onStoreError(rule: Rule, error: Error): void;
+}
+
+export const FailurePolicy = {
+  Open: 'open',
+  Closed: 'closed',
+} as const;
+
+export type FailurePolicy = (typeof FailurePolicy)[keyof typeof FailurePolicy];

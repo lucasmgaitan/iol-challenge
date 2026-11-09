@@ -10,7 +10,13 @@ const bucket: Rule = {
   refillPerSecond: 1,
 };
 const window: Rule = { name: 'test', algorithm: Algorithm.SlidingWindow, limit: 2, windowMs: 1000 };
-const decision: Decision = { allowed: true, limit: 2, remaining: 1, retryAfterMs: 0 };
+const decision: Decision = {
+  allowed: true,
+  limit: 2,
+  remaining: 1,
+  retryAfterMs: 0,
+  degraded: false,
+};
 
 function fakeStore() {
   const consume = vi.fn<RateLimitStore['consume']>().mockResolvedValue(decision);

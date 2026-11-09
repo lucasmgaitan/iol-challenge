@@ -1,11 +1,13 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import { RateLimiterUnavailableError } from '#core/errors.js';
 import { Algorithm, type Decision, type RateLimiter, type Rule } from '#core/types.js';
 import { rateLimiterPlugin } from '#fastify/plugin.js';
 import {
   RateLimit,
   RateLimitErrorMessage,
   RateLimitHeader,
+  SERVICE_UNAVAILABLE_STATUS,
   TOO_MANY_REQUESTS_STATUS,
   type RouteResult,
 } from '#fastify/rate-limit.js';
@@ -16,8 +18,20 @@ const rule: Rule = {
   capacity: 5,
   refillPerSecond: 1,
 };
-const allowed: Decision = { allowed: true, limit: 5, remaining: 4, retryAfterMs: 0 };
-const denied: Decision = { allowed: false, limit: 5, remaining: 0, retryAfterMs: 1500 };
+const allowed: Decision = {
+  allowed: true,
+  limit: 5,
+  remaining: 4,
+  retryAfterMs: 0,
+  degraded: false,
+};
+const denied: Decision = {
+  allowed: false,
+  limit: 5,
+  remaining: 0,
+  retryAfterMs: 1500,
+  degraded: false,
+};
 
 class HelloController {
   readonly greeting = 'hello';
@@ -34,7 +48,10 @@ class HelloController {
 }
 
 function appWith(decision: Decision, register = true) {
-  const consume = vi.fn<RateLimiter['consume']>().mockResolvedValue(decision);
+  return appWithLimiter(vi.fn<RateLimiter['consume']>().mockResolvedValue(decision), register);
+}
+
+function appWithLimiter(consume: RateLimiter['consume'], register = true) {
   const app = Fastify();
   if (register) void app.register(rateLimiterPlugin, { limiter: { consume } });
   const controller = new HelloController();
@@ -80,5 +97,23 @@ describe('@RateLimit', () => {
     const response = await app.inject({ method: 'GET', url: '/by-ip' });
     expect(response.statusCode).toBe(500);
     expect(response.json()).toMatchObject({ message: RateLimitErrorMessage.pluginNotRegistered });
+  });
+
+  it('runs the handler without rate limit headers when the decision is degraded', async () => {
+    const { app } = appWith({ ...allowed, degraded: true });
+    const response = await app.inject({ method: 'GET', url: '/by-ip' });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers[RateLimitHeader.Limit]).toBeUndefined();
+    expect(response.headers[RateLimitHeader.Remaining]).toBeUndefined();
+  });
+
+  it('responds 503 when the rate limiter is unavailable', async () => {
+    const consume = vi
+      .fn<RateLimiter['consume']>()
+      .mockRejectedValue(new RateLimiterUnavailableError(new Error('down')));
+    const { app } = appWithLimiter(consume);
+    const response = await app.inject({ method: 'GET', url: '/by-ip' });
+    expect(response.statusCode).toBe(SERVICE_UNAVAILABLE_STATUS);
+    expect(response.json()).toEqual({ error: RateLimitErrorMessage.serviceUnavailable });
   });
 });

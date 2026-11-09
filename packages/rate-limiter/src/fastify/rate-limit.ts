@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { Decision, Rule } from '#core/types.js';
+import { RateLimiterUnavailableError } from '#core/errors.js';
+import type { Decision, RateLimiter, Rule } from '#core/types.js';
 import { RATE_LIMITER_PLUGIN_NAME } from '#fastify/plugin.js';
 
 export const RateLimitHeader = {
@@ -9,10 +10,12 @@ export const RateLimitHeader = {
 } as const;
 
 export const TOO_MANY_REQUESTS_STATUS = 429;
+export const SERVICE_UNAVAILABLE_STATUS = 503;
 const MS_PER_SECOND = 1000;
 
 export const RateLimitErrorMessage = {
   tooManyRequests: 'Too Many Requests',
+  serviceUnavailable: 'Service Unavailable',
   pluginNotRegistered: `the ${RATE_LIMITER_PLUGIN_NAME} plugin must be registered before using @RateLimit`,
 } as const;
 
@@ -39,8 +42,14 @@ export function RateLimit(rule: Rule, { identify = identifyByIp }: RateLimitOpti
       const limiter = request.server.rateLimiter;
       if (!limiter) throw new Error(RateLimitErrorMessage.pluginNotRegistered);
 
-      const decision = await limiter.consume(identify(request), rule);
-      reply.headers(headersFor(decision));
+      const decision = await consumeOrUnavailable(limiter, identify(request), rule);
+      if (!decision) {
+        return reply
+          .code(SERVICE_UNAVAILABLE_STATUS)
+          .send({ error: RateLimitErrorMessage.serviceUnavailable });
+      }
+
+      if (!decision.degraded) reply.headers(headersFor(decision));
       if (!decision.allowed) {
         return reply
           .code(TOO_MANY_REQUESTS_STATUS)
@@ -49,6 +58,19 @@ export function RateLimit(rule: Rule, { identify = identifyByIp }: RateLimitOpti
       return handler.call(this, request, reply);
     };
   };
+}
+
+async function consumeOrUnavailable(
+  limiter: RateLimiter,
+  key: string,
+  rule: Rule,
+): Promise<Decision | undefined> {
+  try {
+    return await limiter.consume(key, rule);
+  } catch (error) {
+    if (error instanceof RateLimiterUnavailableError) return undefined;
+    throw error;
+  }
 }
 
 function headersFor({ allowed, limit, remaining, retryAfterMs }: Decision): Record<string, number> {
