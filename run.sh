@@ -149,6 +149,7 @@ run_case() {
   fi
   case_dir="$(mktemp -d)"
   printf '%s\n' "$case_json" >"$case_dir/$CASE_JSON"
+  chmod -R a+rX "$case_dir"
 
   duration="$(duration_seconds "$(yq_cases -r ".cases[\"${name}\"].duration")")"
   outage_at="$(yq_cases -r ".cases[\"${name}\"].redis_outage.at // \"\"")"
