@@ -8,38 +8,31 @@ readonly REDIS_IMAGE="redis:7.4-alpine"
 readonly REDIS_PORT="${REDIS_PORT:-6380}"
 readonly API_PORT="${API_PORT:-3000}"
 readonly API_URL="http://localhost:${API_PORT}"
-readonly STACK_URL="http://localhost:8080"
-readonly GRAFANA_URL="http://localhost:3001/d/rate-limiter"
-readonly PROMETHEUS_URL="http://localhost:9090"
-readonly PROMETHEUS_QUERY_URL="http://127.0.0.1:9090/api/v1/query"
-readonly LOCUST_URL="http://localhost:8089"
-readonly VERIFY_SCRIPT="/scripts/verify.js"
-readonly SHOWCASE_SCRIPT="/scripts/showcase.js"
-readonly PROMETHEUS_OUTPUT="experimental-prometheus-rw"
+readonly YQ_IMAGE="mikefarah/yq:4.54.3"
+readonly CASES_FILE="load-tests/cases.yaml"
+readonly CASE_SCRIPT="/scripts/run-case.js"
+readonly CASE_MOUNT="/case"
+readonly CASE_JSON="case.json"
+readonly CASE_NAME_PATTERN='^[a-z0-9][a-z0-9-]*$'
+readonly VERIFY_CASE="verify"
+readonly DEMO_CASE="showcase"
 readonly REQUIRED_NODE_MAJOR=22
 readonly READY_RETRIES=50
 readonly READY_INTERVAL_S=0.2
-readonly OUTAGE_STARTS_AFTER_S=20
-readonly OUTAGE_DURATION_S=20
-readonly SMOKE_USERS=4
-readonly SMOKE_RUN_TIME_S=15
-readonly SMOKE_FLAG="--smoke"
-readonly LOCUST_PROFILES=4
-readonly PROMETHEUS_NON_EMPTY_RESULT='"result":[{'
 
 if [ -t 1 ]; then
-  readonly BOLD=$'\033[1m' DIM=$'\033[2m' RED=$'\033[31m' GREEN=$'\033[32m'
-  readonly YELLOW=$'\033[33m' CYAN=$'\033[36m' RESET=$'\033[0m'
+  readonly BOLD=$'\033[1m' DIM=$'\033[2m' RED=$'\033[31m'
+  readonly YELLOW=$'\033[33m' CYAN=$'\033[36m' RESET=$'\033[0m' COLOR_OUTPUT=true
 else
-  readonly BOLD="" DIM="" RED="" GREEN="" YELLOW="" CYAN="" RESET=""
+  readonly BOLD="" DIM="" RED="" YELLOW="" CYAN="" RESET="" COLOR_OUTPUT=false
 fi
 
 api_pid=""
+case_dir=""
 stack_started=false
 
 info() { printf '%s▸%s %s\n' "$CYAN" "$RESET" "$1"; }
 warn() { printf '%s⚠%s %s\n' "$YELLOW" "$RESET" "$1"; }
-success() { printf '%s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 fail() {
   printf '%s✗%s %s\n' "$RED" "$RESET" "$1" >&2
   exit 1
@@ -50,18 +43,18 @@ usage() {
 Usage: ./run.sh <command>
 
 Commands:
-  start    Run the API locally with Node on ${API_URL}, backed by Redis in Docker (Ctrl+C to stop)
-  verify   Run the k6 verification against 3 API replicas behind nginx; exits non-zero if any check fails
-  demo     Start the full stack with Grafana, generate 60 s of mixed traffic and take Redis down
-           in the middle; the stack stays up for exploring the dashboard until Ctrl+C
-  explore  Start the full stack with Grafana and Locust: configure and run your own tests from
-           ${LOCUST_URL} and watch them on the dashboard (Ctrl+C to stop)
-  explore ${SMOKE_FLAG}
-           Run Locust headless for ${SMOKE_RUN_TIME_S} s and check that its metrics reach Prometheus
+  cases          List the load test cases defined in ${CASES_FILE}
+  case <name>    Run a case against 3 API replicas behind nginx and print the results;
+                 exits non-zero if the case expectations are not met
+  verify         Shortcut for: case ${VERIFY_CASE}   (used by CI)
+  demo           Shortcut for: case ${DEMO_CASE}
+  start          Run the API locally with Node on ${API_URL}, backed by Redis in Docker (Ctrl+C to stop)
 EOF
 }
 
 compose() { docker compose --project-directory "$ROOT_DIR" --progress quiet "$@"; }
+
+yq_cases() { docker run --rm -i "$YQ_IMAGE" "$@" <"$ROOT_DIR/$CASES_FILE"; }
 
 cleanup() {
   if [ -n "$api_pid" ] && kill -0 "$api_pid" 2>/dev/null; then
@@ -71,8 +64,9 @@ cleanup() {
   docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1 || true
   if [ "$stack_started" = true ]; then
     info "Stopping the stack"
-    compose --profile load --profile explore down --remove-orphans >/dev/null 2>&1 || true
+    compose --profile load down --remove-orphans --timeout 3 >/dev/null 2>&1 || true
   fi
+  if [ -n "$case_dir" ]; then rm -rf "$case_dir"; fi
 }
 
 require_docker() {
@@ -98,35 +92,93 @@ wait_until() {
   return 1
 }
 
+interruptible_sleep() {
+  sleep "$1" &
+  wait $!
+}
+
+duration_seconds() {
+  case "$1" in
+    *m) printf '%s' "$((${1%m} * 60))" ;;
+    *s) printf '%s' "${1%s}" ;;
+    *) fail "Unsupported duration \"$1\" in ${CASES_FILE}: use seconds (30s) or minutes (1m)" ;;
+  esac
+}
+
+countdown() {
+  local seconds="$1" message="$2" left
+  if [ "$seconds" -le 0 ]; then return 0; fi
+  if [ "$COLOR_OUTPUT" = false ]; then
+    printf '  %s… %ss\n' "$message" "$seconds"
+    interruptible_sleep "$seconds"
+    return 0
+  fi
+  for left in $(seq "$seconds" -1 1); do
+    printf '\r  %s%s… %ss %s' "$DIM" "$message" "$left" "$RESET"
+    interruptible_sleep 1
+  done
+  printf '\r\033[K'
+}
+
 start_stack() {
   info "Building the API image and starting: $*"
   stack_started=true
   compose up -d --build --wait "$@" >/dev/null
 }
 
-wait_forever() {
-  while true; do
-    sleep 3600 &
-    wait $!
-  done
+list_cases() {
+  require_docker
+  printf '%sCases in %s%s\n\n' "$BOLD" "$CASES_FILE" "$RESET"
+  yq_cases -r '.cases | to_entries | .[] | .key + "\t" + .value.description' |
+    while IFS=$'\t' read -r name description; do
+      printf '  %s%-16s%s %s\n' "$BOLD" "$name" "$RESET" "$description"
+    done
+  printf '\nRun one with: ./run.sh case <name>\n'
 }
 
-prometheus_has() {
-  curl -fsG "$PROMETHEUS_QUERY_URL" --data-urlencode "query=$1" | grep -qF "$PROMETHEUS_NON_EMPTY_RESULT"
-}
+run_case() {
+  local name="$1" case_json duration outage_at outage_for k6_pid
+  require_docker
+  [[ "$name" =~ $CASE_NAME_PATTERN ]] || fail "Invalid case name \"${name}\""
 
-countdown() {
-  local seconds="$1" message="$2" left
-  if [ ! -t 1 ]; then
-    printf '  %s… %ss\n' "$message" "$seconds"
-    sleep "$seconds"
-    return 0
+  case_json="$(yq_cases -o=json ".cases[\"${name}\"] | select(. != null) | .name = \"${name}\"")"
+  if [ -z "$case_json" ]; then
+    printf '%s✗%s Unknown case "%s". Available cases:\n' "$RED" "$RESET" "$name" >&2
+    yq_cases -r '.cases | keys | .[]' | sed 's/^/  /' >&2
+    exit 1
   fi
-  for left in $(seq "$seconds" -1 1); do
-    printf '\r  %s%s… %ss %s' "$DIM" "$message" "$left" "$RESET"
-    sleep 1
-  done
-  printf '\r\033[K'
+  case_dir="$(mktemp -d)"
+  printf '%s\n' "$case_json" >"$case_dir/$CASE_JSON"
+
+  duration="$(duration_seconds "$(yq_cases -r ".cases[\"${name}\"].duration")")"
+  outage_at="$(yq_cases -r ".cases[\"${name}\"].redis_outage.at // \"\"")"
+  outage_for="$(yq_cases -r ".cases[\"${name}\"].redis_outage.for // \"\"")"
+
+  start_stack redis api nginx
+  printf '\n%s▸ Case %s%s · %s\n' "$BOLD" "$name" "$RESET" \
+    "$(yq_cases -r ".cases[\"${name}\"].description")"
+
+  compose --profile load run --rm -v "${case_dir}:${CASE_MOUNT}:ro" -e COLOR="$COLOR_OUTPUT" \
+    k6 run --quiet "$CASE_SCRIPT" &
+  k6_pid=$!
+
+  if [ -n "$outage_at" ]; then
+    outage_at="$(duration_seconds "$outage_at")"
+    outage_for="$(duration_seconds "$outage_for")"
+    countdown "$outage_at" "running, Redis goes down in"
+    warn "$(printf '%02d:%02d  Redis stopped: the API fails open and the circuit breaker opens' \
+      $((outage_at / 60)) $((outage_at % 60)))"
+    compose stop redis >/dev/null
+    countdown "$outage_for" "Redis comes back in"
+    info "$(printf '%02d:%02d  Redis started: the circuit closes after its half-open trial' \
+      $(((outage_at + outage_for) / 60)) $(((outage_at + outage_for) % 60)))"
+    compose start redis >/dev/null
+    countdown $((duration - outage_at - outage_for)) "running"
+  else
+    countdown "$duration" "running"
+  fi
+
+  if wait "$k6_pid"; then return 0; else return 1; fi
 }
 
 run_start() {
@@ -154,78 +206,20 @@ run_start() {
   wait "$api_pid"
 }
 
-run_verify() {
-  require_docker
-  start_stack redis api nginx
-  info "Running the k6 verification (about 30 s)"
-  if compose --profile load run --rm k6 run "$VERIFY_SCRIPT"; then
-    success "All rate limiting checks passed"
-  else
-    fail "Some rate limiting checks failed (see the k6 summary above)"
-  fi
-}
-
-run_demo() {
-  require_docker
-  start_stack redis api nginx prometheus grafana
-  printf '\n%sDashboard%s  %s\n%sAPI%s        %s/hello  %s/hello-window\n%sPrometheus%s %s\n\n' \
-    "$BOLD" "$RESET" "$GRAFANA_URL" "$BOLD" "$RESET" "$STACK_URL" "$STACK_URL" \
-    "$BOLD" "$RESET" "$PROMETHEUS_URL"
-
-  info "Generating 60 s of mixed traffic (steady, bursts, a spike and an algorithm comparison)"
-  compose --profile load run --rm k6 run --quiet -o "$PROMETHEUS_OUTPUT" "$SHOWCASE_SCRIPT" &
-  local k6_pid=$!
-
-  countdown "$OUTAGE_STARTS_AFTER_S" "Redis goes down in"
-  warn "Stopping Redis: the API fails open and the circuit breaker opens"
-  compose stop redis >/dev/null
-  countdown "$OUTAGE_DURATION_S" "Redis comes back in"
-  info "Starting Redis again: the circuit closes after its half-open trial"
-  compose start redis >/dev/null
-
-  wait "$k6_pid" || true
-  success "Traffic finished. The stack stays up: explore ${GRAFANA_URL} (Ctrl+C to stop)"
-  wait_forever
-}
-
-run_explore() {
-  require_docker
-  if [ "${1:-}" = "$SMOKE_FLAG" ]; then
-    run_explore_smoke
-    return 0
-  fi
-  start_stack redis api nginx prometheus grafana locust
-  printf '\n%sLocust%s     %s   (configure and start your tests here)\n%sDashboard%s  %s\n\n' \
-    "$BOLD" "$RESET" "$LOCUST_URL" "$BOLD" "$RESET" "$GRAFANA_URL"
-  info "Stack ready (Ctrl+C to stop)"
-  wait_forever
-}
-
-run_explore_smoke() {
-  start_stack redis api nginx prometheus
-  info "Running Locust headless with every profile for ${SMOKE_RUN_TIME_S} s"
-  export LOCUST_AUTOSTART=true LOCUST_AUTOQUIT=0 LOCUST_USERS="$SMOKE_USERS"
-  export LOCUST_SPAWN_RATE="$SMOKE_USERS" LOCUST_RUN_TIME="${SMOKE_RUN_TIME_S}s"
-  compose --profile explore up -d --build locust >/dev/null
-  countdown "$SMOKE_RUN_TIME_S" "Locust is sending traffic"
-
-  wait_until prometheus_has "count(count by (profile) (locust_requests_total)) == ${LOCUST_PROFILES}" ||
-    fail "Not every Locust profile reached Prometheus"
-  wait_until prometheus_has 'sum(locust_requests_total{status="429"}) > 0' ||
-    fail "Locust traffic was never rate limited"
-  success "Locust sent traffic from every profile, got rate limited, and its metrics reached Prometheus"
-}
-
 main() {
   local command="${1:-}"
   trap cleanup EXIT
   trap 'exit 130' INT TERM
 
   case "$command" in
+    cases) list_cases ;;
+    case)
+      [ -n "${2:-}" ] || fail "Usage: ./run.sh case <name>   (see ./run.sh cases)"
+      run_case "$2"
+      ;;
+    verify) run_case "$VERIFY_CASE" ;;
+    demo) run_case "$DEMO_CASE" ;;
     start) run_start ;;
-    verify) run_verify ;;
-    demo) run_demo ;;
-    explore) run_explore "${2:-}" ;;
     *)
       usage
       [ -z "$command" ] || exit 1

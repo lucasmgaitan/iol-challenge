@@ -40,7 +40,7 @@ export default tseslint.config(
   {
     files: ['load-tests/**/*.js'],
     languageOptions: {
-      globals: { __ENV: 'readonly' },
+      globals: { __ENV: 'readonly', open: 'readonly' },
     },
   },
   prettier,

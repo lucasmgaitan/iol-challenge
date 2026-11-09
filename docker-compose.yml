@@ -37,64 +37,15 @@ services:
       api:
         condition: service_healthy
 
-  prometheus:
-    image: prom/prometheus:v3.16.0
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --web.enable-remote-write-receiver
-      - --storage.tsdb.retention.time=1d
-    volumes:
-      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports:
-      - '9090:9090'
-    depends_on:
-      api:
-        condition: service_healthy
-
-  grafana:
-    image: grafana/grafana:13.3.0
-    environment:
-      GF_AUTH_ANONYMOUS_ENABLED: 'true'
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
-      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/rate-limiter.json
-    volumes:
-      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports:
-      - '3001:3000'
-    depends_on:
-      - prometheus
-
   k6:
     image: grafana/k6:2.3.0
     profiles: ['load']
     environment:
       BASE_URL: http://nginx
-      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
-      K6_PROMETHEUS_RW_TREND_STATS: p(50),p(95),p(99)
-      K6_PROMETHEUS_RW_PUSH_INTERVAL: 1s
+      CASE_FILE: /case/case.json
       K6_NO_USAGE_REPORT: 'true'
+      COLOR:
     volumes:
       - ./load-tests:/scripts:ro
-    depends_on:
-      - nginx
-
-  locust:
-    build: ./infrastructure/locust
-    image: iol-rate-limiter-locust
-    profiles: ['explore']
-    command: ['-f', '/mnt/locust/locustfile.py', '--host', 'http://nginx', '--class-picker']
-    environment:
-      - LOCUST_AUTOSTART
-      - LOCUST_AUTOQUIT
-      - LOCUST_USERS
-      - LOCUST_SPAWN_RATE
-      - LOCUST_RUN_TIME
-    volumes:
-      - ./load-tests:/mnt/locust:ro
-    ports:
-      - '8089:8089'
     depends_on:
       - nginx
