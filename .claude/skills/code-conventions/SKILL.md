@@ -1,6 +1,6 @@
 ---
 name: code-conventions
-description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings, async/await). Usar siempre que se escriba, edite, renombre o revise código en rate-limiter/ (src/, test/, configs, scripts Lua).
+description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings, async/await). Usar siempre que se escriba, edite, renombre o revise código del repo (src/, test/, packages/rate-limiter/, configs, scripts Lua).
 ---
 
 # Convenciones de código
@@ -15,7 +15,7 @@ El código tiene que explicarse solo. Por defecto no se escriben comentarios.
   - extraer una función o constante con nombre;
   - un test que documente el comportamiento.
 - En los tests, el nombre del `it(...)` es la explicación. No agregar comentarios dentro del cuerpo.
-- Las decisiones de diseño y los trade-offs van en `rate-limiter/DESIGN.md`, no en el código.
+- Las decisiones de diseño y los trade-offs van en `packages/rate-limiter/DESIGN.md`, no en el código.
 
 ### Excepciones (las únicas permitidas)
 
@@ -41,11 +41,11 @@ it('allows up to the limit within one window', () => { ... });
 
 Todos los archivos y carpetas de código van en minúsculas, con palabras separadas por guiones.
 
-| Bien | Mal |
-|---|---|
-| `token-bucket.ts` | `tokenBucket.ts`, `TokenBucket.ts`, `token_bucket.ts` |
-| `memory-store.test.ts` | `memoryStore.test.ts` |
-| `lua/token-bucket.lua` | `lua/tokenBucket.lua` |
+| Bien                   | Mal                                                   |
+| ---------------------- | ----------------------------------------------------- |
+| `token-bucket.ts`      | `tokenBucket.ts`, `TokenBucket.ts`, `token_bucket.ts` |
+| `redis-store.test.ts`  | `redisStore.test.ts`                                  |
+| `lua/token-bucket.lua` | `lua/tokenBucket.lua`                                 |
 
 Esto aplica al nombre del archivo, no a lo que exporta: `token-bucket.ts` exporta `tokenBucket` y `TokenBucketState`. Al renombrar, actualizar los imports (con extensión `.js`, por ESM).
 
@@ -57,7 +57,10 @@ Todo valor string se define una sola vez como constante con nombre y se usa a tr
 
 - **Conjuntos de valores** (como un enum): objeto `as const` y un tipo derivado con el mismo nombre. No usar `enum` de TypeScript.
   ```ts
-  export const Algorithm = { TokenBucket: 'token-bucket', SlidingWindow: 'sliding-window' } as const;
+  export const Algorithm = {
+    TokenBucket: 'token-bucket',
+    SlidingWindow: 'sliding-window',
+  } as const;
   export type Algorithm = (typeof Algorithm)[keyof typeof Algorithm];
   ```
 - **Valores sueltos**: `const` en `UPPER_SNAKE_CASE`, en el módulo que es dueño del concepto.
@@ -67,16 +70,26 @@ Todo valor string se define una sola vez como constante con nombre y se usa a tr
 - **Mensajes con datos variables**: una función dentro de un objeto de mensajes, para que el texto viva en un solo lugar y los tests puedan comparar contra él.
   ```ts
   export const RuleErrorMessage = {
-    positiveInteger: (field: string, value: number) => `${field} must be a positive integer, got ${String(value)}`,
+    positiveInteger: (field: string, value: number) =>
+      `${field} must be a positive integer, got ${String(value)}`,
   } as const;
   ```
 - Los tests usan las mismas constantes (`algorithm: Algorithm.TokenBucket`, `toThrow(CLOCK_BACKWARDS_ERROR)`), no copias del literal.
 
 Quedan afuera:
+
 - especificadores de import;
 - títulos de `describe` / `it`;
 - datos arbitrarios de tests, como claves de ejemplo (`'a'`, `'user-1'`);
-- nombres de propiedad tipados como `keyof`, porque los valida el compilador (`requirePositiveInteger(rule, 'capacity')`).
+- nombres de propiedad tipados como `keyof`, porque los valida el compilador (`requirePositiveInteger(rule, 'capacity')`);
+- nombres de comandos de Redis dentro de `redis.call(...)` en Lua (`'HMGET'`, `'PEXPIRE'`): son el vocabulario de la API, no valores del dominio.
+
+En los scripts Lua, los demás strings (por ejemplo, los nombres de campos de un hash) se definen como `local` en `UPPER_SNAKE_CASE` al principio del script:
+
+```lua
+local TOKENS_FIELD = 'tokens'
+redis.call('HMGET', key, TOKENS_FIELD)
+```
 
 ## 5. async/await, no Promises explícitas
 
@@ -85,19 +98,19 @@ El código asíncrono se escribe con `async`/`await`.
 - No usar `.then()`, `.catch()` ni `.finally()`, ni construir promesas a mano con `Promise.resolve`, `Promise.reject` o `new Promise(...)`.
 - **Toda función `async` tiene al menos un `await` real.** Lo controla `@typescript-eslint/require-await`, que está activa; no se desactiva ni con directivas.
 - **Una función que no es `async` no devuelve promesas.** Si no hay nada que esperar, la función es síncrona y devuelve el valor directamente.
-- Cuando una interfaz tiene implementaciones síncronas y asíncronas, el tipo de retorno es `T | Promise<T>`. Cada implementación devuelve lo que corresponde, y quien llama hace `await` siempre.
+- Cuando un tipo admite implementaciones síncronas y asíncronas, el retorno es `T | Promise<T>`. Cada implementación devuelve lo que corresponde. Caso típico: los handlers decorados con `@RateLimit` son síncronos si no esperan nada, y el wrapper del decorador es `async` porque espera a Redis.
   ```ts
-  interface StateStore {
-    update<S, R>(key: string, transition: ...): R | Promise<R>;
+  type RouteResult = FastifyReply | Promise<FastifyReply>;
+
+  class HelloController {
+    @RateLimit(HELLO_RULE)
+    hello(_request: FastifyRequest, reply: FastifyReply): RouteResult {
+      return reply.send({ message: HELLO_MESSAGE });
+    }
   }
-  class MemoryStore implements StateStore {
-    update<S, R>(key: string, transition: ...): R { ... }
-  }
-  class RedisStore implements StateStore {
-    async update<S, R>(key: string, transition: ...): Promise<R> { ... await this.redis.exec() ... }
-  }
-  const decision = await store.update(key, transition);
   ```
+  Los métodos decorados con `@RateLimit` anotan siempre `: RouteResult`: un decorador estándar solo puede reemplazar un método por otro de tipo compatible.
+- En los tests, los dobles de interfaces async se arman con `vi.fn<Interface['method']>().mockResolvedValue(...)`, no con funciones `async` sin `await`.
 - Los errores se lanzan con `throw` también en las funciones síncronas. Al llamar con `await`, el error llega igual.
 - Los combinadores sí se usan, siempre con `await`: `await Promise.all(...)`, `await Promise.race(...)`.
 - Para esperar un tiempo usar `await setTimeout(ms)` de `node:timers/promises`, no `new Promise(r => setTimeout(r, ms))`.
@@ -105,4 +118,4 @@ El código asíncrono se escribe con `async`/`await`.
 ## Al terminar
 
 - Eliminar los comentarios que no entren en las excepciones, y no borrar las válidas.
-- Correr `npm run check` desde `rate-limiter/`.
+- Correr `npm run check` desde la raíz del repo.
