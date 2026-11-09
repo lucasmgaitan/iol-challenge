@@ -30,7 +30,7 @@ services:
   nginx:
     image: nginx:1.30.6-alpine
     volumes:
-      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - '8080:80'
     depends_on:
@@ -44,7 +44,7 @@ services:
       - --web.enable-remote-write-receiver
       - --storage.tsdb.retention.time=1d
     volumes:
-      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - '9090:9090'
     depends_on:
@@ -60,8 +60,8 @@ services:
       GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/rate-limiter.json
     volumes:
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - '3001:3000'
     depends_on:
@@ -78,5 +78,23 @@ services:
       K6_NO_USAGE_REPORT: 'true'
     volumes:
       - ./load-tests:/scripts:ro
+    depends_on:
+      - nginx
+
+  locust:
+    build: ./infrastructure/locust
+    image: iol-rate-limiter-locust
+    profiles: ['explore']
+    command: ['-f', '/mnt/locust/locustfile.py', '--host', 'http://nginx', '--class-picker']
+    environment:
+      - LOCUST_AUTOSTART
+      - LOCUST_AUTOQUIT
+      - LOCUST_USERS
+      - LOCUST_SPAWN_RATE
+      - LOCUST_RUN_TIME
+    volumes:
+      - ./load-tests:/mnt/locust:ro
+    ports:
+      - '8089:8089'
     depends_on:
       - nginx

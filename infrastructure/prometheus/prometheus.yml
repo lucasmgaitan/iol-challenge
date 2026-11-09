@@ -9,3 +9,7 @@ scrape_configs:
         type: A
         port: 3000
         refresh_interval: 5s
+
+  - job_name: locust
+    static_configs:
+      - targets: ['locust:9646']

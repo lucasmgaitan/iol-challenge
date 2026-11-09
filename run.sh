@@ -11,6 +11,8 @@ readonly API_URL="http://localhost:${API_PORT}"
 readonly STACK_URL="http://localhost:8080"
 readonly GRAFANA_URL="http://localhost:3001/d/rate-limiter"
 readonly PROMETHEUS_URL="http://localhost:9090"
+readonly PROMETHEUS_QUERY_URL="http://127.0.0.1:9090/api/v1/query"
+readonly LOCUST_URL="http://localhost:8089"
 readonly VERIFY_SCRIPT="/scripts/verify.js"
 readonly SHOWCASE_SCRIPT="/scripts/showcase.js"
 readonly PROMETHEUS_OUTPUT="experimental-prometheus-rw"
@@ -19,6 +21,11 @@ readonly READY_RETRIES=50
 readonly READY_INTERVAL_S=0.2
 readonly OUTAGE_STARTS_AFTER_S=20
 readonly OUTAGE_DURATION_S=20
+readonly SMOKE_USERS=4
+readonly SMOKE_RUN_TIME_S=15
+readonly SMOKE_FLAG="--smoke"
+readonly LOCUST_PROFILES=4
+readonly PROMETHEUS_NON_EMPTY_RESULT='"result":[{'
 
 if [ -t 1 ]; then
   readonly BOLD=$'\033[1m' DIM=$'\033[2m' RED=$'\033[31m' GREEN=$'\033[32m'
@@ -47,6 +54,10 @@ Commands:
   verify   Run the k6 verification against 3 API replicas behind nginx; exits non-zero if any check fails
   demo     Start the full stack with Grafana, generate 60 s of mixed traffic and take Redis down
            in the middle; the stack stays up for exploring the dashboard until Ctrl+C
+  explore  Start the full stack with Grafana and Locust: configure and run your own tests from
+           ${LOCUST_URL} and watch them on the dashboard (Ctrl+C to stop)
+  explore ${SMOKE_FLAG}
+           Run Locust headless for ${SMOKE_RUN_TIME_S} s and check that its metrics reach Prometheus
 EOF
 }
 
@@ -60,7 +71,7 @@ cleanup() {
   docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1 || true
   if [ "$stack_started" = true ]; then
     info "Stopping the stack"
-    compose --profile load down --remove-orphans >/dev/null 2>&1 || true
+    compose --profile load --profile explore down --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 
@@ -91,6 +102,17 @@ start_stack() {
   info "Building the API image and starting: $*"
   stack_started=true
   compose up -d --build --wait "$@" >/dev/null
+}
+
+wait_forever() {
+  while true; do
+    sleep 3600 &
+    wait $!
+  done
+}
+
+prometheus_has() {
+  curl -fsG "$PROMETHEUS_QUERY_URL" --data-urlencode "query=$1" | grep -qF "$PROMETHEUS_NON_EMPTY_RESULT"
 }
 
 countdown() {
@@ -163,10 +185,35 @@ run_demo() {
 
   wait "$k6_pid" || true
   success "Traffic finished. The stack stays up: explore ${GRAFANA_URL} (Ctrl+C to stop)"
-  while true; do
-    sleep 3600 &
-    wait $!
-  done
+  wait_forever
+}
+
+run_explore() {
+  require_docker
+  if [ "${1:-}" = "$SMOKE_FLAG" ]; then
+    run_explore_smoke
+    return 0
+  fi
+  start_stack redis api nginx prometheus grafana locust
+  printf '\n%sLocust%s     %s   (configure and start your tests here)\n%sDashboard%s  %s\n\n' \
+    "$BOLD" "$RESET" "$LOCUST_URL" "$BOLD" "$RESET" "$GRAFANA_URL"
+  info "Stack ready (Ctrl+C to stop)"
+  wait_forever
+}
+
+run_explore_smoke() {
+  start_stack redis api nginx prometheus
+  info "Running Locust headless with every profile for ${SMOKE_RUN_TIME_S} s"
+  export LOCUST_AUTOSTART=true LOCUST_AUTOQUIT=0 LOCUST_USERS="$SMOKE_USERS"
+  export LOCUST_SPAWN_RATE="$SMOKE_USERS" LOCUST_RUN_TIME="${SMOKE_RUN_TIME_S}s"
+  compose --profile explore up -d --build locust >/dev/null
+  countdown "$SMOKE_RUN_TIME_S" "Locust is sending traffic"
+
+  wait_until prometheus_has "count(count by (profile) (locust_requests_total)) == ${LOCUST_PROFILES}" ||
+    fail "Not every Locust profile reached Prometheus"
+  wait_until prometheus_has 'sum(locust_requests_total{status="429"}) > 0' ||
+    fail "Locust traffic was never rate limited"
+  success "Locust sent traffic from every profile, got rate limited, and its metrics reached Prometheus"
 }
 
 main() {
@@ -178,6 +225,7 @@ main() {
     start) run_start ;;
     verify) run_verify ;;
     demo) run_demo ;;
+    explore) run_explore "${2:-}" ;;
     *)
       usage
       [ -z "$command" ] || exit 1

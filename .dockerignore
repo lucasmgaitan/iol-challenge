@@ -4,7 +4,7 @@
 .git
 .github
 .claude
-infra
+infrastructure
 load-tests
 test
 packages/*/test

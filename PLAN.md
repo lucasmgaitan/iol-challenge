@@ -35,10 +35,10 @@ iol-challenge/                 la app (@iol/api) y raíz del workspace de npm
       src/strategies/          validación y TTL por algoritmo (patrón Strategy)
       src/stores/              infra: redis-store.ts + lua/*.lua
       src/fastify/             plugin + decorador @RateLimit
-  load-tests/                  k6: verify.js (umbrales que pasan o fallan) y showcase.js (tráfico para la demo)
-  infra/                       nginx (balanceo), Prometheus y Grafana (dashboard provisionado)
+  load-tests/                  k6: verify.js (umbrales) y showcase.js (demo); Locust: locustfile.py (exploración)
+  infrastructure/              nginx (balanceo), Prometheus, Grafana (dashboard provisionado) y la imagen de Locust
   Dockerfile  docker-compose.yml
-  run.sh                       ./run.sh start | verify | demo
+  run.sh                       ./run.sh start | verify | demo | explore [--smoke]
   README.md
 ```
 
@@ -77,4 +77,5 @@ iol-challenge/                 la app (@iol/api) y raíz del workspace de npm
 - [x] Fase 4: workspace + Fastify
 - [x] Fase 5: resiliencia y observabilidad
 - [x] Verificación: k6 + Grafana (`./run.sh verify` en CI)
+- [x] Exploración interactiva: Locust (`./run.sh explore`, smoke test en CI)
 - [ ] Fase 6: README y DESIGN
