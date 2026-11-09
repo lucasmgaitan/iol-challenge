@@ -7,7 +7,10 @@ const Env = {
   RedisCommandTimeoutMs: 'REDIS_COMMAND_TIMEOUT_MS',
   Port: 'PORT',
   Host: 'HOST',
+  TrustProxy: 'TRUST_PROXY',
 } as const;
+
+const ENABLED = 'true';
 
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 const DEFAULT_PORT = 3000;
@@ -23,7 +26,11 @@ const redis = createRedisClient({
   url: process.env[Env.RedisUrl] ?? DEFAULT_REDIS_URL,
   commandTimeoutMs: Number(process.env[Env.RedisCommandTimeoutMs] ?? DEFAULT_COMMAND_TIMEOUT_MS),
 });
-const app = await buildApp({ store: new RedisStore({ redis }), logger: true });
+const app = await buildApp({
+  store: new RedisStore({ redis }),
+  logger: true,
+  trustProxy: process.env[Env.TrustProxy] === ENABLED,
+});
 
 redis.on('error', (error: Error) => {
   app.log.warn({ err: error }, LogMessage.redisError);

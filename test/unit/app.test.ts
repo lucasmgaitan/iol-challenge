@@ -1,7 +1,7 @@
 import type { Decision, RateLimitStore } from '@iol/rate-limiter';
 import { RateLimitHeader, TOO_MANY_REQUESTS_STATUS } from '@iol/rate-limiter/fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HELLO_MESSAGE, HELLO_RULE } from '#controllers/hello-controller.js';
+import { HELLO_MESSAGE, HELLO_RULE, HELLO_WINDOW_RULE } from '#controllers/hello-controller.js';
 import { buildApp, Route } from '#http/app.js';
 import { MetricName, Outcome } from '#http/metrics.js';
 import { CIRCUIT_FAILURE_THRESHOLD, CIRCUIT_HALF_OPEN_AFTER_MS } from '#http/rate-limiter.js';
@@ -40,10 +40,43 @@ describe(`GET ${Route.Hello}`, () => {
     expect(consume.mock.calls[0]?.[1]).toBe(HELLO_RULE);
   });
 
+  it('identifies clients by X-Forwarded-For only when the proxy is trusted', async () => {
+    const consume = vi.fn<RateLimitStore['consume']>().mockResolvedValue(allowed);
+    const forwarded = { 'x-forwarded-for': '198.51.100.9' };
+    const trusted = await buildApp({ store: { consume }, trustProxy: true });
+    const untrusted = await buildApp({ store: { consume } });
+    await trusted.inject({ method: 'GET', url: Route.Hello, headers: forwarded });
+    await untrusted.inject({
+      method: 'GET',
+      url: Route.Hello,
+      headers: forwarded,
+      remoteAddress: '203.0.113.7',
+    });
+    expect(consume.mock.calls.map(([key]) => key)).toEqual([
+      'hello:token-bucket:198.51.100.9',
+      'hello:token-bucket:203.0.113.7',
+    ]);
+  });
+
   it('responds 429 when the store denies the request', async () => {
     const app = await appWith(vi.fn<RateLimitStore['consume']>().mockResolvedValue(denied));
     const response = await app.inject({ method: 'GET', url: Route.Hello });
     expect(response.statusCode).toBe(TOO_MANY_REQUESTS_STATUS);
+  });
+});
+
+describe(`GET ${Route.HelloWindow}`, () => {
+  it('is rate limited with the sliding window rule', async () => {
+    const consume = vi.fn<RateLimitStore['consume']>().mockResolvedValue(allowed);
+    const app = await appWith(consume);
+    const response = await app.inject({
+      method: 'GET',
+      url: Route.HelloWindow,
+      remoteAddress: '203.0.113.7',
+    });
+    expect(response.json()).toEqual({ message: HELLO_MESSAGE });
+    expect(consume.mock.calls[0]?.[0]).toBe('hello-window:sliding-window:203.0.113.7');
+    expect(consume.mock.calls[0]?.[1]).toBe(HELLO_WINDOW_RULE);
   });
 });
 

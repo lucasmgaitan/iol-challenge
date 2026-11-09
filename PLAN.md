@@ -18,7 +18,7 @@ Una librería de rate limiting distribuido (`@iol/rate-limiter`) y una app de Fa
 | Falla de Redis | Timeouts en ioredis (100 ms por comando, sin cola offline ni reintentos) + **fail-open** por defecto (`failurePolicy`, `closed` → 503) + circuit breaker de **cockatiel** inyectado como `ExecutionPolicy` | La API no cae si cae Redis; el breaker evita esperar el timeout en cada request mientras Redis no responde. El dominio no depende de cockatiel.                                     |
 | HTTP           | **Fastify**; la librería expone `@iol/rate-limiter/fastify` (plugin + decorador estándar)                                                                                                                  | El núcleo no depende de Fastify (peerDependency opcional).                                                                                                                          |
 | Observabilidad | `RateLimiterObserver` en la librería; la app lo conecta a logs (pino) y a `/metrics` (`prom-client`): decisiones por regla y resultado, errores del store y estado del circuito                            | La librería no depende de pino ni de Prometheus. Métricas solo por regla, no por cliente, para no explotar la cardinalidad.                                                         |
-| Deploy         | `docker-compose up` → app + Redis                                                                                                                                                                          | Fácil de desplegar.                                                                                                                                                                 |
+| Deploy         | `docker compose`: Redis + 3 réplicas de la API detrás de nginx, Prometheus y Grafana; k6 bajo demanda                                                                                                      | Solo requiere Docker. Las réplicas prueban que el límite es distribuido.                                                                                                            |
 
 ## 3. Estructura
 
@@ -35,7 +35,11 @@ iol-challenge/                 la app (@iol/api) y raíz del workspace de npm
       src/strategies/          validación y TTL por algoritmo (patrón Strategy)
       src/stores/              infra: redis-store.ts + lua/*.lua
       src/fastify/             plugin + decorador @RateLimit
-  README.md  docker-compose.yml  Dockerfile
+  load-tests/                  k6: verify.js (umbrales que pasan o fallan) y showcase.js (tráfico para la demo)
+  infra/                       nginx (balanceo), Prometheus y Grafana (dashboard provisionado)
+  Dockerfile  docker-compose.yml
+  run.sh                       ./run.sh start | verify | demo
+  README.md
 ```
 
 ## 4. Fases
@@ -72,4 +76,5 @@ iol-challenge/                 la app (@iol/api) y raíz del workspace de npm
 - [x] Fase 3: RedisStore + Lua
 - [x] Fase 4: workspace + Fastify
 - [x] Fase 5: resiliencia y observabilidad
-- [ ] Fase 6: deploy y docs
+- [x] Verificación: k6 + Grafana (`./run.sh verify` en CI)
+- [ ] Fase 6: README y DESIGN

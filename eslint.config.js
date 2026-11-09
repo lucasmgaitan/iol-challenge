@@ -37,5 +37,11 @@ export default tseslint.config(
     files: ['**/*.js'],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    files: ['load-tests/**/*.js'],
+    languageOptions: {
+      globals: { __ENV: 'readonly' },
+    },
+  },
   prettier,
 );

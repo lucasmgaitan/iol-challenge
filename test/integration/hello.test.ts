@@ -4,7 +4,7 @@ import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redi
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { HELLO_RULE } from '#controllers/hello-controller.js';
+import { HELLO_RULE, HELLO_WINDOW_RULE } from '#controllers/hello-controller.js';
 import { buildApp, Route } from '#http/app.js';
 import { MetricName } from '#http/metrics.js';
 import { CIRCUIT_FAILURE_THRESHOLD } from '#http/rate-limiter.js';
@@ -51,6 +51,19 @@ describe(`GET ${Route.Hello} backed by Redis`, () => {
 
   it('keeps a separate limit for each client', async () => {
     expect((await hello('198.51.100.2')).statusCode).toBe(200);
+  });
+
+  it(`limits ${Route.HelloWindow} with its own sliding window`, async () => {
+    const statuses: number[] = [];
+    for (let request = 0; request <= HELLO_WINDOW_RULE.limit; request++) {
+      const response = await app.inject({
+        method: 'GET',
+        url: Route.HelloWindow,
+        remoteAddress: '198.51.100.1',
+      });
+      statuses.push(response.statusCode);
+    }
+    expect(statuses).toEqual([200, 200, 200, 200, 200, TOO_MANY_REQUESTS_STATUS]);
   });
 });
 

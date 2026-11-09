@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/coverage
+.git
+.github
+.claude
+infra
+load-tests
+test
+packages/*/test
+*.pdf
+*.md
+run.sh
