@@ -54,7 +54,7 @@ export interface StateByAlgorithm {
   [Algorithm.SlidingWindow]: SlidingWindowState;
 }
 
-export interface Transition<S extends StoredState = StoredState> {
+interface Transition<S extends StoredState = StoredState> {
   readonly decision: Decision;
   readonly state?: S;
 }
