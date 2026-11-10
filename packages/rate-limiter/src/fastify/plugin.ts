@@ -11,7 +11,7 @@ declare module 'fastify' {
 export const RATE_LIMITER_PLUGIN_NAME = '@iol/rate-limiter';
 const SUPPORTED_FASTIFY_VERSION = '5.x';
 
-export interface RateLimiterPluginOptions {
+interface RateLimiterPluginOptions {
   readonly limiter: RateLimiter;
 }
 

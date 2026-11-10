@@ -2,13 +2,16 @@ import { setTimeout } from 'node:timers/promises';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { allow } from '#core/decision.js';
+import { RateLimitContentionError } from '#core/errors.js';
 import { createRateLimiter } from '#core/rate-limiter.js';
 import { Algorithm, type Decision, type RateLimiter, type Rule } from '#core/types.js';
-import { DEFAULT_KEY_PREFIX, RedisStore } from '#stores/redis-store.js';
+import { KEY_PREFIX, RedisRateLimitRepository } from '#stores/redis-rate-limit-repository.js';
 
 const REDIS_IMAGE = 'redis:7.4-alpine';
 const CONTAINER_STARTUP_TIMEOUT_MS = 120_000;
 const INSTANCE_COUNT = 3;
+const CONNECTIONS_PER_INSTANCE = 2;
 
 const bucket: Rule = {
   name: 'test',
@@ -23,7 +26,7 @@ const window: Rule = {
   windowMs: 3_600_000,
 };
 
-describe('RedisStore', () => {
+describe('RedisRateLimitRepository', () => {
   let container: StartedRedisContainer;
   let connections: Redis[];
   let limiters: RateLimiter[];
@@ -31,10 +34,19 @@ describe('RedisStore', () => {
   beforeAll(async () => {
     container = await new RedisContainer(REDIS_IMAGE).start();
     connections = Array.from(
-      { length: INSTANCE_COUNT },
+      { length: INSTANCE_COUNT * CONNECTIONS_PER_INSTANCE },
       () => new Redis(container.getConnectionUrl()),
     );
-    limiters = connections.map((redis) => createRateLimiter({ store: new RedisStore({ redis }) }));
+    limiters = Array.from({ length: INSTANCE_COUNT }, (_, instance) =>
+      createRateLimiter({
+        repository: new RedisRateLimitRepository({
+          connections: connections.slice(
+            instance * CONNECTIONS_PER_INSTANCE,
+            (instance + 1) * CONNECTIONS_PER_INSTANCE,
+          ),
+        }),
+      }),
+    );
   }, CONTAINER_STARTUP_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -48,6 +60,7 @@ describe('RedisStore', () => {
 
   const limiter = (): RateLimiter => limiters[0] as RateLimiter;
   const redis = (): Redis => connections[0] as Redis;
+  const otherClient = (): Redis => connections[1] as Redis;
 
   async function burst(rule: Rule, requests: number): Promise<Decision[]> {
     const decisions: Decision[] = [];
@@ -96,7 +109,7 @@ describe('RedisStore', () => {
 
   it('stores state under the key prefix with the TTL requested by the strategy', async () => {
     await limiter().consume('203.0.113.7', bucket);
-    const ttl = await redis().pttl(`${DEFAULT_KEY_PREFIX}test:token-bucket:203.0.113.7`);
+    const ttl = await redis().pttl(`${KEY_PREFIX}test:token-bucket:203.0.113.7`);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(3000);
   });
@@ -111,9 +124,36 @@ describe('RedisStore', () => {
     expect(results.filter((result) => result.allowed)).toHaveLength(50);
   });
 
-  it('reloads the script when Redis no longer has it cached', async () => {
+  it('retries when another client writes the key between the read and the commit', async () => {
+    const repository = new RedisRateLimitRepository({ connections: [redis()] });
+    let attempts = 0;
+    const decision = await repository.update('k', 1000, () => {
+      attempts++;
+      if (attempts === 1) void otherClient().hset(`${KEY_PREFIX}k`, 'value', 0);
+      return { decision: allow(1, 0), state: { value: attempts } };
+    });
+    expect(decision.allowed).toBe(true);
+    expect(attempts).toBe(2);
+    expect(await redis().hget(`${KEY_PREFIX}k`, 'value')).toBe('2');
+  });
+
+  it('gives up after the configured attempts when the key keeps changing', async () => {
+    const repository = new RedisRateLimitRepository({ connections: [redis()], maxAttempts: 2 });
+    let attempts = 0;
+    const update = repository.update('k', 1000, () => {
+      attempts++;
+      void otherClient().hset(`${KEY_PREFIX}k`, 'value', attempts);
+      return { decision: allow(1, 0), state: { value: 0 } };
+    });
+    await expect(update).rejects.toBeInstanceOf(RateLimitContentionError);
+    expect(attempts).toBe(2);
+  });
+
+  it('does not write anything when the request is rejected', async () => {
+    await burst(bucket, 3);
+    const key = `${KEY_PREFIX}test:token-bucket:k`;
+    const before = await redis().hgetall(key);
     await limiter().consume('k', bucket);
-    await redis().script('FLUSH');
-    expect((await limiter().consume('k', bucket)).remaining).toBe(1);
+    expect(await redis().hgetall(key)).toEqual(before);
   });
 });

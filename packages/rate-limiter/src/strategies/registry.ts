@@ -1,9 +1,14 @@
 import { slidingWindow } from '#strategies/sliding-window.js';
 import { tokenBucket } from '#strategies/token-bucket.js';
-import { Algorithm, type RateLimitStrategy, type RuleByAlgorithm } from '#core/types.js';
+import {
+  Algorithm,
+  type RateLimitStrategy,
+  type RuleByAlgorithm,
+  type StateByAlgorithm,
+} from '#core/types.js';
 
-export type StrategyRegistry = {
-  readonly [A in Algorithm]: RateLimitStrategy<RuleByAlgorithm[A]>;
+type StrategyRegistry = {
+  readonly [A in Algorithm]: RateLimitStrategy<RuleByAlgorithm[A], StateByAlgorithm[A]>;
 };
 
 export const strategies: StrategyRegistry = {

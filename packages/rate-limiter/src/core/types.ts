@@ -36,26 +36,48 @@ export interface Decision {
   readonly degraded: boolean;
 }
 
-export interface RateLimitStrategy<R extends Rule> {
+export type StoredState = Readonly<Record<string, number>>;
+
+export type TokenBucketState = {
+  readonly tokens: number;
+  readonly updatedAt: number;
+};
+
+export type SlidingWindowState = {
+  readonly windowStart: number;
+  readonly current: number;
+  readonly previous: number;
+};
+
+export interface StateByAlgorithm {
+  [Algorithm.TokenBucket]: TokenBucketState;
+  [Algorithm.SlidingWindow]: SlidingWindowState;
+}
+
+export interface Transition<S extends StoredState = StoredState> {
+  readonly decision: Decision;
+  readonly state?: S;
+}
+
+export type StateTransition = (stored: StoredState | undefined, nowMs: number) => Transition;
+
+export interface RateLimitStrategy<R extends Rule, S extends StoredState> {
   validate(rule: R): void;
   retentionMs(rule: R): number;
+  limit(rule: R): number;
+  decide(rule: R, stored: S | undefined, nowMs: number): Transition<S>;
 }
 
 export interface RateLimiter {
   consume(key: string, rule: Rule): Promise<Decision>;
 }
 
-export interface RateLimitStore {
-  consume(key: string, rule: Rule, ttlMs: number): Promise<Decision>;
+export interface RateLimitRepository {
+  update(key: string, ttlMs: number, transition: StateTransition): Promise<Decision>;
 }
 
 export interface ExecutionPolicy {
   execute<T>(fn: () => Promise<T>): Promise<T>;
-}
-
-export interface RateLimiterObserver {
-  onDecision(rule: Rule, decision: Decision): void;
-  onStoreError(rule: Rule, error: Error): void;
 }
 
 export const FailurePolicy = {

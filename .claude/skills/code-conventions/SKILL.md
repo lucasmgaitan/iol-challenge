@@ -1,6 +1,6 @@
 ---
 name: code-conventions
-description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings, async/await). Usar siempre que se escriba, edite, renombre o revise código del repo (src/, test/, packages/rate-limiter/, configs, scripts Lua).
+description: Convenciones de código del proyecto (comentarios, idioma, nombres de archivo, no magic strings, async/await). Usar siempre que se escriba, edite, renombre o revise código del repo (src/, test/, packages/rate-limiter/, configs).
 ---
 
 # Convenciones de código
@@ -23,7 +23,7 @@ El código tiene que explicarse solo. Por defecto no se escriben comentarios.
   ```ts
   // previous * (1 - t/W) <= limit - 1 - current  →  t >= W * (1 - (limit - 1 - current) / previous)
   ```
-- **Código que el autor no domina del todo.** El enunciado del challenge exige documentar con un comentario cualquier código generado por IA que el autor no entienda por completo; lo que no tiene comentario se asume entendido y se puede preguntar en la entrevista. Ese comentario lo escribe o aprueba el autor, es breve y explica el porqué. Caso típico: los scripts Lua. Un agente no agrega estos comentarios por su cuenta: pregunta si hace falta.
+- **Código que el autor no domina del todo.** El enunciado del challenge exige documentar con un comentario cualquier código generado por IA que el autor no entienda por completo; lo que no tiene comentario se asume entendido y se puede preguntar en la entrevista. Ese comentario lo escribe o aprueba el autor, es breve y explica el porqué. Un agente no agrega estos comentarios por su cuenta: pregunta si hace falta.
 - **Directivas** que interpretan las herramientas: `// @ts-check`, `// eslint-disable-next-line <regla>` (con la regla explícita), `#!/usr/bin/env node`.
 
 Ante la duda, no comentar.
@@ -44,8 +44,7 @@ Todos los archivos y carpetas de código van en minúsculas, con palabras separa
 | Bien                   | Mal                                                   |
 | ---------------------- | ----------------------------------------------------- |
 | `token-bucket.ts`      | `tokenBucket.ts`, `TokenBucket.ts`, `token_bucket.ts` |
-| `redis-store.test.ts`  | `redisStore.test.ts`                                  |
-| `lua/token-bucket.lua` | `lua/tokenBucket.lua`                                 |
+| `serial-queue.test.ts` | `serialQueue.test.ts`                                 |
 
 Esto aplica al nombre del archivo, no a lo que exporta: `token-bucket.ts` exporta `tokenBucket` y `TokenBucketState`. Al renombrar, actualizar los imports (con extensión `.js`, por ESM).
 
@@ -82,14 +81,7 @@ Quedan afuera:
 - títulos de `describe` / `it`;
 - datos arbitrarios de tests, como claves de ejemplo (`'a'`, `'user-1'`);
 - nombres de propiedad tipados como `keyof`, porque los valida el compilador (`requirePositiveInteger(rule, 'capacity')`);
-- nombres de comandos de Redis dentro de `redis.call(...)` en Lua (`'HMGET'`, `'PEXPIRE'`): son el vocabulario de la API, no valores del dominio.
-
-En los scripts Lua, los demás strings (por ejemplo, los nombres de campos de un hash) se definen como `local` en `UPPER_SNAKE_CASE` al principio del script:
-
-```lua
-local TOKENS_FIELD = 'tokens'
-redis.call('HMGET', key, TOKENS_FIELD)
-```
+- los nombres de campos de los hashes de Redis: son las propiedades de los tipos de estado (`TokenBucketState`, `SlidingWindowState`), así que los valida el compilador.
 
 ## 5. async/await, no Promises explícitas
 

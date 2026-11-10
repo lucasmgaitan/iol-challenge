@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RateLimiterUnavailableError } from '#core/errors.js';
+import { RateLimitContentionError, RateLimiterUnavailableError } from '#core/errors.js';
 import { createRateLimiter } from '#core/rate-limiter.js';
 import {
   Algorithm,
   FailurePolicy,
   type Decision,
   type ExecutionPolicy,
-  type RateLimiterObserver,
-  type RateLimitStore,
+  type RateLimitRepository,
   type Rule,
 } from '#core/types.js';
 
@@ -24,27 +23,21 @@ const decision: Decision = {
   retryAfterMs: 0,
   degraded: false,
 };
-const storeFailure = new Error('connection refused');
+const repositoryFailure = new Error('connection refused');
 
-function workingStore() {
-  const consume = vi.fn<RateLimitStore['consume']>().mockResolvedValue(decision);
-  return { store: { consume }, consume };
+function workingRepository() {
+  const update = vi.fn<RateLimitRepository['update']>().mockResolvedValue(decision);
+  return { repository: { update }, update };
 }
 
-function failingStore() {
-  const consume = vi.fn<RateLimitStore['consume']>().mockRejectedValue(storeFailure);
-  return { store: { consume }, consume };
-}
-
-function spyObserver() {
-  const onDecision = vi.fn<RateLimiterObserver['onDecision']>();
-  const onStoreError = vi.fn<RateLimiterObserver['onStoreError']>();
-  return { observer: { onDecision, onStoreError }, onDecision, onStoreError };
+function failingRepository() {
+  const update = vi.fn<RateLimitRepository['update']>().mockRejectedValue(repositoryFailure);
+  return { repository: { update }, update };
 }
 
 describe('RateLimiter execution policy', () => {
-  it('calls the store through the injected execution policy', async () => {
-    const { store, consume } = workingStore();
+  it('calls the repository through the injected execution policy', async () => {
+    const { repository, update } = workingRepository();
     let executions = 0;
     const executionPolicy: ExecutionPolicy = {
       execute: async (fn) => {
@@ -52,48 +45,50 @@ describe('RateLimiter execution policy', () => {
         return await fn();
       },
     };
-    await createRateLimiter({ store, executionPolicy }).consume('k', rule);
+    await createRateLimiter({ repository, executionPolicy }).consume('k', rule);
     expect(executions).toBe(1);
-    expect(consume).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
   });
 });
 
 describe('RateLimiter failure policy', () => {
   it('fails open by default: allows the request and marks the decision as degraded', async () => {
-    const { store } = failingStore();
-    const result = await createRateLimiter({ store }).consume('k', rule);
+    const { repository } = failingRepository();
+    const result = await createRateLimiter({ repository }).consume('k', rule);
     expect(result).toMatchObject({ allowed: true, degraded: true });
   });
 
-  it('fails closed when configured, keeping the store error as cause', async () => {
-    const { store } = failingStore();
-    const limiter = createRateLimiter({ store, failurePolicy: FailurePolicy.Closed });
+  it('fails closed when configured, keeping the repository error as cause', async () => {
+    const { repository } = failingRepository();
+    const limiter = createRateLimiter({ repository, failurePolicy: FailurePolicy.Closed });
     await expect(limiter.consume('k', rule)).rejects.toBeInstanceOf(RateLimiterUnavailableError);
-    await expect(limiter.consume('k', rule)).rejects.toHaveProperty('cause', storeFailure);
+    await expect(limiter.consume('k', rule)).rejects.toHaveProperty('cause', repositoryFailure);
   });
 
-  it('does not treat an invalid rule as a store failure', async () => {
-    const { store } = workingStore();
-    const { observer, onStoreError } = spyObserver();
-    const limiter = createRateLimiter({ store, observer });
-    await expect(limiter.consume('k', { ...rule, capacity: 0 })).rejects.toThrow(RangeError);
-    expect(onStoreError).not.toHaveBeenCalled();
+  it('does not fail open on an invalid rule', async () => {
+    const { repository, update } = failingRepository();
+    await expect(
+      createRateLimiter({ repository }).consume('k', { ...rule, capacity: 0 }),
+    ).rejects.toThrow(RangeError);
+    expect(update).not.toHaveBeenCalled();
   });
 });
 
-describe('RateLimiter observer', () => {
-  it('reports every decision', async () => {
-    const { store } = workingStore();
-    const { observer, onDecision } = spyObserver();
-    await createRateLimiter({ store, observer }).consume('k', rule);
-    expect(onDecision).toHaveBeenCalledWith(rule, decision);
-  });
-
-  it('reports store errors and the resulting fail-open decision', async () => {
-    const { store } = failingStore();
-    const { observer, onDecision, onStoreError } = spyObserver();
-    await createRateLimiter({ store, observer }).consume('k', rule);
-    expect(onStoreError).toHaveBeenCalledWith(rule, storeFailure);
-    expect(onDecision).toHaveBeenCalledWith(rule, expect.objectContaining({ degraded: true }));
+describe('RateLimiter under contention', () => {
+  it('denies the request when the repository gives up after concurrent writes', async () => {
+    const update = vi
+      .fn<RateLimitRepository['update']>()
+      .mockRejectedValue(new RateLimitContentionError('k'));
+    const limiter = createRateLimiter({
+      repository: { update },
+      failurePolicy: FailurePolicy.Closed,
+    });
+    expect(await limiter.consume('k', rule)).toEqual({
+      allowed: false,
+      limit: 2,
+      remaining: 0,
+      retryAfterMs: 0,
+      degraded: false,
+    });
   });
 });

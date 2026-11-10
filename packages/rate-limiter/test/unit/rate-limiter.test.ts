@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRateLimiter } from '#core/rate-limiter.js';
 import { RuleErrorMessage } from '#core/rule.js';
-import { Algorithm, type Decision, type RateLimitStore, type Rule } from '#core/types.js';
+import { Algorithm, type Decision, type RateLimitRepository, type Rule } from '#core/types.js';
 
 const bucket: Rule = {
   name: 'test',
@@ -18,21 +18,21 @@ const decision: Decision = {
   degraded: false,
 };
 
-function fakeStore() {
-  const consume = vi.fn<RateLimitStore['consume']>().mockResolvedValue(decision);
-  return { store: { consume }, consume };
+function fakeRepository() {
+  const update = vi.fn<RateLimitRepository['update']>().mockResolvedValue(decision);
+  return { repository: { update }, update };
 }
 
 describe('RateLimiter', () => {
-  it('returns the decision made by the store', async () => {
-    const { store } = fakeStore();
-    expect(await createRateLimiter({ store }).consume('k', bucket)).toEqual(decision);
+  it('returns the decision made by the repository', async () => {
+    const { repository } = fakeRepository();
+    expect(await createRateLimiter({ repository }).consume('k', bucket)).toEqual(decision);
   });
 
   it('stores state under rule name, algorithm and key', async () => {
-    const { store, consume } = fakeStore();
-    await createRateLimiter({ store }).consume('203.0.113.7', { ...bucket, name: 'login' });
-    expect(consume.mock.calls[0]?.[0]).toBe('login:token-bucket:203.0.113.7');
+    const { repository, update } = fakeRepository();
+    await createRateLimiter({ repository }).consume('203.0.113.7', { ...bucket, name: 'login' });
+    expect(update.mock.calls[0]?.[0]).toBe('login:token-bucket:203.0.113.7');
   });
 
   it.each<[string, Rule, number]>([
@@ -42,11 +42,14 @@ describe('RateLimiter', () => {
       2500,
     ],
     ['sliding window: two windows', { ...window, windowMs: 60_000 }, 120_000],
-  ])('asks the store to retain state only as long as it matters (%s)', async (_, rule, ttlMs) => {
-    const { store, consume } = fakeStore();
-    await createRateLimiter({ store }).consume('k', rule);
-    expect(consume.mock.calls[0]?.[2]).toBe(ttlMs);
-  });
+  ])(
+    'asks the repository to retain state only as long as it matters (%s)',
+    async (_, rule, ttlMs) => {
+      const { repository, update } = fakeRepository();
+      await createRateLimiter({ repository }).consume('k', rule);
+      expect(update.mock.calls[0]?.[1]).toBe(ttlMs);
+    },
+  );
 
   it.each<[string, Rule]>([
     ['zero capacity', { ...bucket, capacity: 0 }],
@@ -58,16 +61,16 @@ describe('RateLimiter', () => {
     ['empty name', { ...bucket, name: '' }],
     ['name with separator', { ...bucket, name: 'login:admin' }],
     ['name not kebab-case', { ...bucket, name: 'Login_Rule' }],
-  ])('rejects invalid rules without reaching the store: %s', async (_, rule) => {
-    const { store, consume } = fakeStore();
-    await expect(createRateLimiter({ store }).consume('k', rule)).rejects.toThrow(RangeError);
-    expect(consume).not.toHaveBeenCalled();
+  ])('rejects invalid rules without reaching the repository: %s', async (_, rule) => {
+    const { repository, update } = fakeRepository();
+    await expect(createRateLimiter({ repository }).consume('k', rule)).rejects.toThrow(RangeError);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('reports the offending rule name', async () => {
-    const { store } = fakeStore();
+    const { repository } = fakeRepository();
     await expect(
-      createRateLimiter({ store }).consume('k', { ...bucket, name: 'Bad' }),
+      createRateLimiter({ repository }).consume('k', { ...bucket, name: 'Bad' }),
     ).rejects.toThrow(RuleErrorMessage.invalidName('Bad'));
   });
 });

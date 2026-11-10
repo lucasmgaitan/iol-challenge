@@ -21,13 +21,9 @@ export const RateLimitErrorMessage = {
 
 export type RouteResult = FastifyReply | Promise<FastifyReply>;
 
-export type RouteHandler<This> = (
-  this: This,
-  request: FastifyRequest,
-  reply: FastifyReply,
-) => RouteResult;
+type RouteHandler<This> = (this: This, request: FastifyRequest, reply: FastifyReply) => RouteResult;
 
-export interface RateLimitOptions {
+interface RateLimitOptions {
   readonly identify?: (request: FastifyRequest) => string;
 }
 

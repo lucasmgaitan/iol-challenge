@@ -4,7 +4,7 @@ export const DEFAULT_COMMAND_TIMEOUT_MS = 100;
 const CONNECT_TIMEOUT_MS = 1000;
 const NO_COMMAND_RETRIES = 0;
 
-export interface RedisClientOptions {
+interface RedisClientOptions {
   readonly url: string;
   readonly commandTimeoutMs?: number;
 }

@@ -1,5 +1,6 @@
 import { strategies } from '#strategies/registry.js';
-import { RateLimiterUnavailableError, toError } from '#core/errors.js';
+import { deny } from '#core/decision.js';
+import { RateLimitContentionError, RateLimiterUnavailableError, toError } from '#core/errors.js';
 import { requireValidName } from '#core/rule.js';
 import {
   FailurePolicy,
@@ -7,13 +8,15 @@ import {
   type Decision,
   type ExecutionPolicy,
   type RateLimiter,
-  type RateLimiterObserver,
-  type RateLimitStore,
+  type RateLimitRepository,
   type Rule,
   type RuleByAlgorithm,
+  type StateByAlgorithm,
+  type StateTransition,
 } from '#core/types.js';
 
 const STATE_KEY_SEPARATOR = ':';
+const RETRY_IMMEDIATELY_MS = 0;
 
 const directExecution: ExecutionPolicy = {
   execute: async (fn) => await fn(),
@@ -27,18 +30,16 @@ const FAILED_OPEN: Decision = {
   degraded: true,
 };
 
-export interface RateLimiterDependencies {
-  readonly store: RateLimitStore;
+interface RateLimiterDependencies {
+  readonly repository: RateLimitRepository;
   readonly executionPolicy?: ExecutionPolicy;
   readonly failurePolicy?: FailurePolicy;
-  readonly observer?: RateLimiterObserver;
 }
 
 export function createRateLimiter({
-  store,
+  repository,
   executionPolicy = directExecution,
   failurePolicy = FailurePolicy.Open,
-  observer,
 }: RateLimiterDependencies): RateLimiter {
   async function consumeWith<A extends Algorithm>(
     algorithm: A,
@@ -49,23 +50,44 @@ export function createRateLimiter({
     requireValidName(rule);
     strategy.validate(rule);
 
-    const decision = await decide(
-      rule,
+    const transition: StateTransition = (stored, nowMs) =>
+      strategy.decide(rule, stored as StateByAlgorithm[A] | undefined, nowMs);
+
+    return await decide(
       [rule.name, algorithm, key].join(STATE_KEY_SEPARATOR),
       strategy.retentionMs(rule),
+      transition,
+      strategy.limit(rule),
     );
-    observer?.onDecision(rule, decision);
-    return decision;
   }
 
-  async function decide(rule: Rule, storeKey: string, ttlMs: number): Promise<Decision> {
+  async function decide(
+    storeKey: string,
+    ttlMs: number,
+    transition: StateTransition,
+    limit: number,
+  ): Promise<Decision> {
     try {
-      return await executionPolicy.execute(() => store.consume(storeKey, rule, ttlMs));
+      return await executionPolicy.execute(() => updateOrDeny(storeKey, ttlMs, transition, limit));
     } catch (error) {
-      const storeError = toError(error);
-      observer?.onStoreError(rule, storeError);
-      if (failurePolicy === FailurePolicy.Closed) throw new RateLimiterUnavailableError(storeError);
+      if (failurePolicy === FailurePolicy.Closed) {
+        throw new RateLimiterUnavailableError(toError(error));
+      }
       return FAILED_OPEN;
+    }
+  }
+
+  async function updateOrDeny(
+    storeKey: string,
+    ttlMs: number,
+    transition: StateTransition,
+    limit: number,
+  ): Promise<Decision> {
+    try {
+      return await repository.update(storeKey, ttlMs, transition);
+    } catch (error) {
+      if (error instanceof RateLimitContentionError) return deny(limit, RETRY_IMMEDIATELY_MS);
+      throw error;
     }
   }
 

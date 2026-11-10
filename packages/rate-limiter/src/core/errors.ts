@@ -1,5 +1,6 @@
-export const RateLimiterErrorMessage = {
+const RateLimiterErrorMessage = {
   unavailable: 'rate limiter store is unavailable',
+  contention: (key: string) => `gave up updating "${key}" after repeated concurrent writes`,
 } as const;
 
 export class RateLimiterUnavailableError extends Error {
@@ -7,6 +8,14 @@ export class RateLimiterUnavailableError extends Error {
 
   constructor(cause: Error) {
     super(RateLimiterErrorMessage.unavailable, { cause });
+  }
+}
+
+export class RateLimitContentionError extends Error {
+  override readonly name = RateLimitContentionError.name;
+
+  constructor(key: string) {
+    super(RateLimiterErrorMessage.contention(key));
   }
 }
 
