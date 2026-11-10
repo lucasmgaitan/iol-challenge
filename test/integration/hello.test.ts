@@ -4,7 +4,6 @@ import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redi
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { HELLO_RULE, HELLO_WINDOW_RULE } from '#controllers/hello-controller.js';
 import { buildApp, Route } from '#http/app.js';
 import { CIRCUIT_FAILURE_THRESHOLD } from '#http/rate-limiter.js';
 import { createRedisClient } from '#http/redis-client.js';
@@ -12,6 +11,8 @@ import { createRedisClient } from '#http/redis-client.js';
 const REDIS_IMAGE = 'redis:7.4-alpine';
 const CONTAINER_STARTUP_TIMEOUT_MS = 120_000;
 const UNREACHABLE_REDIS_URL = 'redis://127.0.0.1:1';
+const HELLO_CAPACITY = 5;
+const HELLO_WINDOW_LIMIT = 5;
 
 describe(`GET ${Route.Hello} backed by Redis`, () => {
   let container: StartedRedisContainer;
@@ -36,7 +37,7 @@ describe(`GET ${Route.Hello} backed by Redis`, () => {
 
   it('allows a burst up to the rule capacity, then responds 429', async () => {
     const statuses: number[] = [];
-    for (let request = 0; request <= HELLO_RULE.capacity; request++) {
+    for (let request = 0; request <= HELLO_CAPACITY; request++) {
       statuses.push((await hello('198.51.100.1')).statusCode);
     }
     expect(statuses).toEqual([200, 200, 200, 200, 200, TOO_MANY_REQUESTS_STATUS]);
@@ -54,7 +55,7 @@ describe(`GET ${Route.Hello} backed by Redis`, () => {
 
   it(`limits ${Route.HelloWindow} with its own sliding window`, async () => {
     const statuses: number[] = [];
-    for (let request = 0; request <= HELLO_WINDOW_RULE.limit; request++) {
+    for (let request = 0; request <= HELLO_WINDOW_LIMIT; request++) {
       const response = await app.inject({
         method: 'GET',
         url: Route.HelloWindow,

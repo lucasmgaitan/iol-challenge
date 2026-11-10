@@ -1,9 +1,12 @@
 import type { Decision, RateLimitRepository } from '@iol/rate-limiter';
 import { RateLimitHeader, TOO_MANY_REQUESTS_STATUS } from '@iol/rate-limiter/fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HELLO_MESSAGE, HELLO_RULE, HELLO_WINDOW_RULE } from '#controllers/hello-controller.js';
+import { HELLO_MESSAGE } from '#controllers/hello-controller.js';
 import { buildApp, Route } from '#http/app.js';
 import { CIRCUIT_FAILURE_THRESHOLD, CIRCUIT_HALF_OPEN_AFTER_MS } from '#http/rate-limiter.js';
+
+const HELLO_CAPACITY = 5;
+const HELLO_WINDOW_LIMIT = 5;
 
 const allowed: Decision = {
   allowed: true,
@@ -33,7 +36,7 @@ describe(`GET ${Route.Hello}`, () => {
     await app.inject({ method: 'GET', url: Route.Hello, remoteAddress: '203.0.113.7' });
     expect(update.mock.calls[0]?.[0]).toBe('hello:token-bucket:203.0.113.7');
     const transition = update.mock.calls[0]?.[2];
-    expect(transition?.(undefined, 0).decision.limit).toBe(HELLO_RULE.capacity);
+    expect(transition?.(undefined, 0).decision.limit).toBe(HELLO_CAPACITY);
   });
 
   it('responds 429 when the repository denies the request', async () => {
@@ -55,7 +58,7 @@ describe(`GET ${Route.HelloWindow}`, () => {
     expect(response.json()).toEqual({ message: HELLO_MESSAGE });
     expect(update.mock.calls[0]?.[0]).toBe('hello-window:sliding-window:203.0.113.7');
     const transition = update.mock.calls[0]?.[2];
-    expect(transition?.(undefined, 0).decision.limit).toBe(HELLO_WINDOW_RULE.limit);
+    expect(transition?.(undefined, 0).decision.limit).toBe(HELLO_WINDOW_LIMIT);
   });
 });
 
